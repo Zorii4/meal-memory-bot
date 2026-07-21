@@ -1,4 +1,4 @@
-export default {
+const worker: ExportedHandler<Env> = {
   async fetch(request): Promise<Response> {
     const url = new URL(request.url);
 
@@ -8,4 +8,6 @@ export default {
 
     return new Response("Not found", { status: 404 });
   }
-} satisfies ExportedHandler<Env>;
+};
+
+export default worker;

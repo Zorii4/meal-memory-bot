@@ -8,7 +8,7 @@ describe("worker", () => {
 	it("returns the health status", async () => {
 		const request = new IncomingRequest("http://example.com/health");
 		const ctx = createExecutionContext();
-		const response = await worker.fetch(request, env, ctx);
+		const response = await worker.fetch!(request, env, ctx);
 
 		await waitOnExecutionContext(ctx);
 
