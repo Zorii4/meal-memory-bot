@@ -1,4 +1,4 @@
-import type { Dish, DishSource, NewDish } from "../../domain/dish";
+import type { Dish, DishSource, DishStatistics, NewDish } from "../../domain/dish";
 
 interface DishRow {
   id: string;
@@ -10,6 +10,12 @@ interface DishRow {
   created_by_user_id: string;
   created_at: string;
   updated_at: string;
+}
+
+interface DishStatisticsRow extends DishRow {
+  last_cooked_at: string | null;
+  times_cooked: number;
+  last_recommended_at: string | null;
 }
 
 export type CreateDishResult =
@@ -80,6 +86,43 @@ export class D1DishRepository {
 
     return row === null ? null : toDish(row);
   }
+
+  public async listActiveWithStatistics(): Promise<DishStatistics[]> {
+    const result = await this.db
+      .prepare(
+        `SELECT
+          dishes.id,
+          dishes.name,
+          dishes.normalized_name,
+          dishes.details,
+          dishes.source,
+          dishes.is_active,
+          dishes.created_by_user_id,
+          dishes.created_at,
+          dishes.updated_at,
+          MAX(cook_events.cooked_at) AS last_cooked_at,
+          COUNT(DISTINCT cook_events.id) AS times_cooked,
+          MAX(recommendation_events.created_at) AS last_recommended_at
+        FROM dishes
+        LEFT JOIN cook_events ON cook_events.dish_id = dishes.id
+        LEFT JOIN recommendation_events
+          ON recommendation_events.primary_dish_id = dishes.id
+        WHERE dishes.is_active = 1
+        GROUP BY
+          dishes.id,
+          dishes.name,
+          dishes.normalized_name,
+          dishes.details,
+          dishes.source,
+          dishes.is_active,
+          dishes.created_by_user_id,
+          dishes.created_at,
+          dishes.updated_at`
+      )
+      .all<DishStatisticsRow>();
+
+    return result.results.map(toDishStatistics);
+  }
 }
 
 function toDish(row: DishRow): Dish {
@@ -93,5 +136,14 @@ function toDish(row: DishRow): Dish {
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function toDishStatistics(row: DishStatisticsRow): DishStatistics {
+  return {
+    ...toDish(row),
+    lastCookedAt: row.last_cooked_at,
+    timesCooked: row.times_cooked,
+    lastRecommendedAt: row.last_recommended_at
   };
 }

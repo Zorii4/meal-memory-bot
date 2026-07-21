@@ -22,3 +22,9 @@ export interface NewDish {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface DishStatistics extends Dish {
+  lastCookedAt: string | null;
+  timesCooked: number;
+  lastRecommendedAt: string | null;
+}
