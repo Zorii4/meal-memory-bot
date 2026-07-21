@@ -1,0 +1,216 @@
+import type { Update } from "grammy/types";
+import { describe, expect, it } from "vitest";
+import type { DishRepository } from "../../src/application/add-dish";
+import { createBot } from "../../src/bot/create-bot";
+import type { ConversationState } from "../../src/domain/conversation-state";
+import type { Dish, NewDish } from "../../src/domain/dish";
+
+describe("/start", () => {
+  it("shows the persistent main keyboard to an allowed user", async () => {
+    const telegram = new TelegramApiStub();
+    const bot = createTestBot(telegram, new StateRepositoryStub());
+
+    await bot.handleUpdate(createCommandUpdate(123, "/start"));
+
+    expect(telegram.sentMessages).toEqual([
+      {
+        chat_id: 123,
+        text: "Привет! Добавьте знакомое блюдо или попросите совет на сегодня.",
+        reply_markup: {
+          keyboard: [[{ text: "➕ Добавить блюдо" }], [{ text: "🍽 Посоветовать блюдо" }]],
+          resize_keyboard: true,
+          is_persistent: true
+        }
+      }
+    ]);
+  });
+});
+
+describe("/cancel", () => {
+  it("clears only the sender's conversation state", async () => {
+    const telegram = new TelegramApiStub();
+    const states = new StateRepositoryStub();
+    const bot = createTestBot(telegram, states);
+
+    await bot.handleUpdate(createCommandUpdate(123, "/cancel"));
+
+    expect(states.clearedUserIds).toEqual(["123"]);
+    expect(telegram.sentMessages).toEqual([
+      { chat_id: 123, text: "Текущий ввод отменён." }
+    ]);
+  });
+});
+
+describe("add dish button", () => {
+  it("starts a 15-minute awaiting_dish state", async () => {
+    const telegram = new TelegramApiStub();
+    const states = new StateRepositoryStub();
+    const bot = createTestBot(telegram, states, () => new Date("2026-07-21T12:00:00.000Z"));
+
+    await bot.handleUpdate(createTextUpdate(123, "➕ Добавить блюдо"));
+
+    expect(states.savedStates).toEqual([
+      {
+        telegramUserId: "123",
+        state: "awaiting_dish",
+        expiresAt: "2026-07-21T12:15:00.000Z",
+        updatedAt: "2026-07-21T12:00:00.000Z"
+      }
+    ]);
+    expect(telegram.sentMessages).toEqual([
+      {
+        chat_id: 123,
+        text:
+          "Пришлите блюдо одним сообщением: первая строка — название, остальные — ингредиенты или комментарий. Для отмены используйте /cancel."
+      }
+    ]);
+  });
+});
+
+describe("awaiting dish message", () => {
+  it("adds the next text message and confirms it", async () => {
+    const telegram = new TelegramApiStub();
+    const states = new StateRepositoryStub({
+      telegramUserId: "123",
+      state: "awaiting_dish",
+      expiresAt: "2026-07-21T12:15:00.000Z",
+      updatedAt: "2026-07-21T12:00:00.000Z"
+    });
+    const dishes = new DishRepositoryStub();
+    const bot = createTestBot(
+      telegram,
+      states,
+      () => new Date("2026-07-21T12:00:00.000Z"),
+      dishes,
+      () => "dish-1"
+    );
+
+    await bot.handleUpdate(createTextUpdate(123, "Омлет\nяйца, помидоры"));
+
+    expect(dishes.createdDishes).toMatchObject([
+      { id: "dish-1", name: "Омлет", details: "яйца, помидоры" }
+    ]);
+    expect(states.clearedUserIds).toEqual(["123"]);
+    expect(telegram.sentMessages).toEqual([{ chat_id: 123, text: "Блюдо «Омлет» добавлено." }]);
+  });
+});
+
+function createTestBot(
+  telegram: TelegramApiStub,
+  states: StateRepositoryStub,
+  now?: () => Date,
+  dishes: DishRepository = new DishRepositoryStub(),
+  generateId?: () => string
+) {
+  return createBot(
+    {
+      telegram: {
+        botToken: "telegram-token",
+        webhookSecret: "webhook-secret",
+        allowedUserIds: new Set(["123"])
+      }
+    },
+    {
+      dishes,
+      states,
+      now,
+      generateId,
+      botInfo: {
+        id: 1,
+        is_bot: true,
+        first_name: "Meal Memory Bot",
+        username: "meal_memory_bot",
+        can_join_groups: true,
+        can_read_all_group_messages: false,
+        supports_inline_queries: false,
+        can_connect_to_business: false,
+        has_main_web_app: false,
+        has_topics_enabled: false,
+        allows_users_to_create_topics: false,
+        can_manage_bots: false,
+        supports_join_request_queries: false
+      },
+      client: { fetch: telegram.fetch }
+    }
+  );
+}
+
+function createCommandUpdate(userId: number, text: string): Update {
+  return {
+    update_id: 1,
+    message: {
+      message_id: 1,
+      date: 0,
+      chat: { id: userId, type: "private", first_name: "Test" },
+      from: { id: userId, is_bot: false, first_name: "Test" },
+      text,
+      entities: [{ offset: 0, length: text.length, type: "bot_command" }]
+    }
+  };
+}
+
+function createTextUpdate(userId: number, text: string): Update {
+  return {
+    update_id: 1,
+    message: {
+      message_id: 1,
+      date: 0,
+      chat: { id: userId, type: "private", first_name: "Test" },
+      from: { id: userId, is_bot: false, first_name: "Test" },
+      text
+    }
+  };
+}
+
+class StateRepositoryStub {
+  public readonly clearedUserIds: string[] = [];
+  public readonly savedStates: ConversationState[] = [];
+
+  public constructor(private state: ConversationState | null = null) {}
+
+  public async save(state: ConversationState): Promise<ConversationState> {
+    this.savedStates.push(state);
+    return state;
+  }
+
+  public async findByUserId(): Promise<ConversationState | null> {
+    return this.state;
+  }
+
+  public async clear(telegramUserId: string): Promise<boolean> {
+    this.clearedUserIds.push(telegramUserId);
+    return true;
+  }
+}
+
+class DishRepositoryStub implements DishRepository {
+  public readonly createdDishes: NewDish[] = [];
+
+  public async create(dish: NewDish): Promise<{ kind: "created"; dish: Dish }> {
+    this.createdDishes.push(dish);
+    return { kind: "created", dish: { ...dish, isActive: true } };
+  }
+
+  public async findByNormalizedName(): Promise<Dish | null> {
+    return null;
+  }
+}
+
+class TelegramApiStub {
+  public readonly sentMessages: unknown[] = [];
+
+  public readonly fetch: typeof fetch = async (input, init): Promise<Response> => {
+    const request = new Request(input, init);
+    const payload: unknown = await request.json();
+    this.sentMessages.push(payload);
+
+    return Response.json({
+      ok: true,
+      result: {
+        message_id: 2,
+        date: 0,
+        chat: { id: 123, type: "private", first_name: "Test" }
+      }
+    });
+  };
+}

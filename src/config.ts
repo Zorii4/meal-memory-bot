@@ -1,0 +1,80 @@
+import { z } from "zod";
+
+const DEFAULT_AI_TIMEOUT_MS = 20_000;
+const MAX_AI_TIMEOUT_MS = 25_000;
+
+const requiredString = z.string().trim().min(1);
+
+const configSchema = z.object({
+  TELEGRAM_BOT_TOKEN: requiredString,
+  TELEGRAM_WEBHOOK_SECRET: requiredString,
+  TELEGRAM_ALLOWED_USER_IDS: requiredString,
+  AI_API_KEY: requiredString,
+  AI_BASE_URL: requiredString.url(),
+  AI_MODEL: requiredString,
+  AI_TIMEOUT_MS: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .transform((value) => (value === undefined ? DEFAULT_AI_TIMEOUT_MS : Number(value)))
+    .pipe(z.number().finite().int().min(1).max(MAX_AI_TIMEOUT_MS)),
+  APP_ENV: z.enum(["development", "production"]).default("development")
+});
+
+export interface AppConfig {
+  telegram: {
+    botToken: string;
+    webhookSecret: string;
+    allowedUserIds: ReadonlySet<string>;
+  };
+  ai: {
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+    timeoutMs: number;
+  };
+  appEnv: "development" | "production";
+}
+
+export class ConfigurationError extends Error {
+  public readonly code = "CONFIG_INVALID";
+
+  public constructor() {
+    super("Invalid application configuration");
+    this.name = "ConfigurationError";
+  }
+}
+
+export function parseAllowedUserIds(value: string): ReadonlySet<string> {
+  const userIds = value.split(",").map((userId) => userId.trim());
+
+  if (userIds.length === 0 || userIds.some((userId) => userId.length === 0)) {
+    throw new ConfigurationError();
+  }
+
+  return new Set(userIds);
+}
+
+export function parseConfig(value: unknown): AppConfig {
+  const result = configSchema.safeParse(value);
+
+  if (!result.success) {
+    throw new ConfigurationError();
+  }
+
+  return {
+    telegram: {
+      botToken: result.data.TELEGRAM_BOT_TOKEN,
+      webhookSecret: result.data.TELEGRAM_WEBHOOK_SECRET,
+      allowedUserIds: parseAllowedUserIds(result.data.TELEGRAM_ALLOWED_USER_IDS)
+    },
+    ai: {
+      apiKey: result.data.AI_API_KEY,
+      baseUrl: result.data.AI_BASE_URL,
+      model: result.data.AI_MODEL,
+      timeoutMs: result.data.AI_TIMEOUT_MS
+    },
+    appEnv: result.data.APP_ENV
+  };
+}
