@@ -2,6 +2,12 @@ import { Bot, type BotConfig, type Context } from "grammy";
 import type { DishRepository } from "../application/add-dish";
 import type { ConversationStateRepository } from "../application/conversation-state-repository";
 import type { ConfirmationHistoryRepository } from "../application/confirm-recommendation-cooked";
+import type { NewIdeaHistoryRepository } from "../application/save-ai-recommendation-idea";
+import type {
+  AIAssistedRecommendationDishRepository,
+  AIAssistedRecommendationHistoryRepository,
+  AIRecommendationClient
+} from "../application/get-ai-assisted-recommendation";
 import type {
   RecommendationDishRepository,
   RecommendationHistoryRepository
@@ -18,8 +24,13 @@ import { messages } from "./messages";
 import { createAllowlistMiddleware } from "./middleware/allowlist";
 
 export interface CreateBotDependencies {
-  dishes: DishRepository & RecommendationDishRepository;
-  history: RecommendationHistoryRepository & ConfirmationHistoryRepository;
+  dishes: DishRepository & RecommendationDishRepository & AIAssistedRecommendationDishRepository;
+  history: RecommendationHistoryRepository &
+    ConfirmationHistoryRepository &
+    AIAssistedRecommendationHistoryRepository &
+    NewIdeaHistoryRepository;
+  ai: AIRecommendationClient;
+  systemPrompt: string;
   states: ConversationStateRepository;
   now?: () => Date;
   generateId?: () => string;
@@ -51,6 +62,8 @@ export function createBot(
     handleRecommendDish(context, {
       dishes: dependencies.dishes,
       history: dependencies.history,
+      ai: dependencies.ai,
+      systemPrompt: dependencies.systemPrompt,
       now: (dependencies.now ?? (() => new Date()))(),
       generateId: dependencies.generateId ?? crypto.randomUUID,
       random: dependencies.random ?? Math.random
@@ -60,6 +73,8 @@ export function createBot(
     handleRecommendationCallback(context, {
       dishes: dependencies.dishes,
       history: dependencies.history,
+      ai: dependencies.ai,
+      systemPrompt: dependencies.systemPrompt,
       now: (dependencies.now ?? (() => new Date()))(),
       generateId: dependencies.generateId ?? crypto.randomUUID,
       random: dependencies.random ?? Math.random

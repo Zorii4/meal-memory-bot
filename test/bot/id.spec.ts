@@ -18,9 +18,17 @@ describe("/id", () => {
         dishes: {
           findByNormalizedName: async () => null,
           create: async (dish) => ({ kind: "created", dish: { ...dish, isActive: true } }),
-          listActiveWithStatistics: async () => []
+          listActiveWithStatistics: async () => [],
+          listActiveNames: async () => []
         },
-        history: { createRecommendation: async (event) => event },
+        history: {
+          createRecommendation: async (event) => event,
+          listRecentCooked: async () => [],
+          findRecommendationById: async () => null,
+          recordCook: async () => ({ kind: "duplicate" as const })
+        },
+        ai: { complete: async () => "{}" },
+        systemPrompt: "private prompt",
         states: {
           save: async (state) => state,
           findByUserId: async () => null,

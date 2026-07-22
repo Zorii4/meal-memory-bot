@@ -1,12 +1,16 @@
 import type { Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 import type { DishRepository } from "../../src/application/add-dish";
+import type {
+  AIAssistedRecommendationDishRepository,
+  AIRecommendationClient
+} from "../../src/application/get-ai-assisted-recommendation";
 import type { RecommendationDishRepository } from "../../src/application/get-fallback-recommendation";
 import { createBot } from "../../src/bot/create-bot";
 import type { ConversationState } from "../../src/domain/conversation-state";
 import type { Dish, NewDish } from "../../src/domain/dish";
 import type { DishStatistics } from "../../src/domain/dish";
-import type { RecommendationEvent } from "../../src/domain/history";
+import type { RecentCookedDish, RecommendationEvent } from "../../src/domain/history";
 
 describe("/start", () => {
   it("shows the persistent main keyboard to an allowed user", async () => {
@@ -124,6 +128,77 @@ describe("recommend dish button", () => {
       }
     ]);
   });
+
+  it("shows the AI selection reason when the response is valid", async () => {
+    const telegram = new TelegramApiStub();
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      () => new Date("2026-07-21T12:00:00.000Z"),
+      new DishRepositoryStub([dishStatistics({ id: "dish-1", name: "Омлет" })]),
+      () => "recommendation-1",
+      new HistoryRepositoryStub(),
+      new AIClientStub(
+        JSON.stringify({
+          selectedDishId: "dish-1",
+          selectionReason: "Это простой вариант на сегодня.",
+          newIdea: null,
+          warnings: []
+        })
+      )
+    );
+
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+
+    expect(telegram.sentMessages).toContainEqual(
+      expect.objectContaining({ text: "🍽 Сегодня: Омлет\n\nЭто простой вариант на сегодня." })
+    );
+  });
+
+  it("shows a valid AI new idea with its two actions", async () => {
+    const telegram = new TelegramApiStub();
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      () => new Date("2026-07-21T12:00:00.000Z"),
+      new DishRepositoryStub([dishStatistics({ id: "dish-1", name: "Омлет" })]),
+      () => "recommendation-1",
+      new HistoryRepositoryStub(),
+      new AIClientStub(
+        JSON.stringify({
+          selectedDishId: "dish-1",
+          selectionReason: "Это простой вариант на сегодня.",
+          newIdea: {
+            name: "Суп с чечевицей",
+            similarToDishIds: ["dish-1"],
+            whyItFits: "Похожий простой вариант.",
+            ingredients: ["чечевица", "лук"],
+            prepMinutes: 30,
+            nutritionFocus: ["protein", "fiber"]
+          },
+          warnings: []
+        })
+      )
+    );
+
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+
+    expect(telegram.sentMessages).toContainEqual({
+      chat_id: 123,
+      text:
+        "🍽 Сегодня: Омлет\n\nЭто простой вариант на сегодня.\n\n✨ Похожая новинка: Суп с чечевицей\nПохожий простой вариант.",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Приготовили основное", callback_data: "c:recommendation-1" }],
+          [{ text: "🔄 Другой совет", callback_data: "a:recommendation-1" }],
+          [
+            { text: "✅ Приготовили новинку", callback_data: "n:recommendation-1" },
+            { text: "💾 Сохранить новинку", callback_data: "s:recommendation-1" }
+          ]
+        ]
+      }
+    });
+  });
 });
 
 describe("awaiting dish message", () => {
@@ -158,9 +233,11 @@ function createTestBot(
   telegram: TelegramApiStub,
   states: StateRepositoryStub,
   now?: () => Date,
-  dishes: DishRepository & RecommendationDishRepository = new DishRepositoryStub(),
+  dishes: DishRepository & RecommendationDishRepository & AIAssistedRecommendationDishRepository =
+    new DishRepositoryStub(),
   generateId?: () => string,
-  history: HistoryRepositoryStub = new HistoryRepositoryStub()
+  history: HistoryRepositoryStub = new HistoryRepositoryStub(),
+  ai: AIClientStub = new AIClientStub("{}")
 ) {
   return createBot(
     {
@@ -173,6 +250,8 @@ function createTestBot(
     {
       dishes,
       history,
+      ai,
+      systemPrompt: "private prompt",
       states,
       now,
       generateId,
@@ -261,6 +340,10 @@ class DishRepositoryStub implements DishRepository {
   public async listActiveWithStatistics(): Promise<DishStatistics[]> {
     return this.statistics;
   }
+
+  public async listActiveNames(): Promise<string[]> {
+    return this.statistics.map((dish) => dish.name);
+  }
 }
 
 class HistoryRepositoryStub {
@@ -269,6 +352,18 @@ class HistoryRepositoryStub {
   public async createRecommendation(event: RecommendationEvent): Promise<RecommendationEvent> {
     this.recommendations.push(event);
     return event;
+  }
+
+  public async listRecentCooked(): Promise<RecentCookedDish[]> {
+    return [];
+  }
+}
+
+class AIClientStub implements AIRecommendationClient {
+  public constructor(private readonly response: string) {}
+
+  public async complete(): Promise<string> {
+    return this.response;
   }
 }
 

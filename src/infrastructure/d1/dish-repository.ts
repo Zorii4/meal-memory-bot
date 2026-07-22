@@ -123,6 +123,21 @@ export class D1DishRepository {
 
     return result.results.map(toDishStatistics);
   }
+
+  public async listActiveNames(limit: number): Promise<string[]> {
+    const result = await this.db
+      .prepare(
+        `SELECT name
+        FROM dishes
+        WHERE is_active = 1
+        ORDER BY name COLLATE NOCASE ASC
+        LIMIT ?`
+      )
+      .bind(limit)
+      .all<{ name: string }>();
+
+    return result.results.map((row) => row.name);
+  }
 }
 
 function toDish(row: DishRow): Dish {

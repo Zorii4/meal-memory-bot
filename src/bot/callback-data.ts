@@ -1,6 +1,8 @@
 export const callbackActions = {
   confirmCook: "c",
-  requestAnother: "a"
+  requestAnother: "a",
+  confirmNewIdeaCook: "n",
+  saveNewIdea: "s"
 } as const;
 
 export function createRecommendationCallbackData(
@@ -26,7 +28,12 @@ export function parseRecommendationCallbackData(value: string | undefined): Reco
     return null;
   }
 
-  if (action === callbackActions.confirmCook || action === callbackActions.requestAnother) {
+  if (
+    action === callbackActions.confirmCook ||
+    action === callbackActions.requestAnother ||
+    action === callbackActions.confirmNewIdeaCook ||
+    action === callbackActions.saveNewIdea
+  ) {
     return { action, recommendationId };
   }
 

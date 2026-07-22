@@ -1,14 +1,15 @@
 import type { Context } from "grammy";
 import {
-  getFallbackRecommendationForUser,
-  type GetFallbackRecommendationDependencies
-} from "../../application/get-fallback-recommendation";
+  getAIAssistedRecommendationForUser,
+  type GetAIAssistedRecommendationDependencies
+} from "../../application/get-ai-assisted-recommendation";
 import { messages } from "../messages";
 import { createRecommendationKeyboard } from "../recommendation-keyboard";
+import { formatRecommendationText } from "../recommendation-text";
 
 export async function handleRecommendDish(
   context: Pick<Context, "from" | "reply">,
-  dependencies: GetFallbackRecommendationDependencies
+  dependencies: GetAIAssistedRecommendationDependencies
 ): Promise<void> {
   const userId = context.from?.id;
 
@@ -17,14 +18,17 @@ export async function handleRecommendDish(
     return;
   }
 
-  const result = await getFallbackRecommendationForUser(String(userId), dependencies);
+  const result = await getAIAssistedRecommendationForUser(String(userId), dependencies);
 
   if (result.kind === "empty") {
     await context.reply(messages.recommendationEmpty);
     return;
   }
 
-  await context.reply(messages.fallbackRecommendation(result.dish.name), {
-    reply_markup: createRecommendationKeyboard(result.recommendation.id)
+  await context.reply(formatRecommendationText(result.dish.name, result.aiResponse), {
+    reply_markup: createRecommendationKeyboard(
+      result.recommendation.id,
+      result.aiResponse !== null && result.aiResponse.newIdea !== null
+    )
   });
 }

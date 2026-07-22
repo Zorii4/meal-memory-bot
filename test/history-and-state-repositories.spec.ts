@@ -45,6 +45,37 @@ describe("D1HistoryRepository", () => {
     expect(repeated).toEqual({ kind: "duplicate" });
   });
 
+  it("returns the latest cooked dishes with names and a limit", async () => {
+    const dishRepository = new D1DishRepository(env.DB);
+    const secondDish: NewDish = {
+      ...dish,
+      id: "dish-history-2",
+      name: "Суп",
+      normalizedName: "суп"
+    };
+    await dishRepository.create(secondDish);
+
+    const repository = new D1HistoryRepository(env.DB);
+    await repository.recordCook({
+      id: "cook-old",
+      dishId: dish.id,
+      cookedByUserId: "123456",
+      cookedAt: "2026-07-20T18:00:00.000Z",
+      telegramCallbackQueryId: "callback-old"
+    });
+    await repository.recordCook({
+      id: "cook-new",
+      dishId: secondDish.id,
+      cookedByUserId: "123456",
+      cookedAt: "2026-07-21T18:00:00.000Z",
+      telegramCallbackQueryId: "callback-new"
+    });
+
+    expect(await repository.listRecentCooked(1)).toEqual([
+      { name: secondDish.name, cookedAt: "2026-07-21T18:00:00.000Z" }
+    ]);
+  });
+
   it("validates new idea JSON when storing and reading a recommendation", async () => {
     const repository = new D1HistoryRepository(env.DB);
     const event: RecommendationEvent = {

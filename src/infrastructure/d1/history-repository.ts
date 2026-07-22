@@ -1,4 +1,4 @@
-import type { CookEvent, RecommendationEvent } from "../../domain/history";
+import type { CookEvent, RecentCookedDish, RecommendationEvent } from "../../domain/history";
 
 interface RecommendationEventRow {
   id: string;
@@ -6,6 +6,11 @@ interface RecommendationEventRow {
   new_idea_json: string | null;
   requested_by_user_id: string;
   created_at: string;
+}
+
+interface RecentCookedDishRow {
+  name: string;
+  cooked_at: string;
 }
 
 export type RecordCookResult =
@@ -77,6 +82,21 @@ export class D1HistoryRepository {
       .first<RecommendationEventRow>();
 
     return row === null ? null : toRecommendationEvent(row);
+  }
+
+  public async listRecentCooked(limit: number): Promise<RecentCookedDish[]> {
+    const result = await this.db
+      .prepare(
+        `SELECT dishes.name, cook_events.cooked_at
+        FROM cook_events
+        INNER JOIN dishes ON dishes.id = cook_events.dish_id
+        ORDER BY cook_events.cooked_at DESC
+        LIMIT ?`
+      )
+      .bind(limit)
+      .all<RecentCookedDishRow>();
+
+    return result.results.map((row) => ({ name: row.name, cookedAt: row.cooked_at }));
   }
 }
 

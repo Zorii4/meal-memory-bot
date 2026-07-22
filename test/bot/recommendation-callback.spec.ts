@@ -2,11 +2,18 @@ import type { Context } from "grammy";
 import { describe, expect, it } from "vitest";
 import type { ConfirmationHistoryRepository } from "../../src/application/confirm-recommendation-cooked";
 import type {
+  AIAssistedRecommendationDishRepository,
+  AIAssistedRecommendationHistoryRepository,
+  AIRecommendationClient
+} from "../../src/application/get-ai-assisted-recommendation";
+import type {
   RecommendationDishRepository,
   RecommendationHistoryRepository
 } from "../../src/application/get-fallback-recommendation";
+import type { CreateDishResult, DishRepository } from "../../src/application/add-dish";
 import { handleRecommendationCallback } from "../../src/bot/handlers/confirm-recommendation-cooked";
-import type { DishStatistics } from "../../src/domain/dish";
+import { messages } from "../../src/bot/messages";
+import type { Dish, DishStatistics, NewDish } from "../../src/domain/dish";
 import type { CookEvent, RecommendationEvent } from "../../src/domain/history";
 
 describe("recommendation callback", () => {
@@ -17,6 +24,8 @@ describe("recommendation callback", () => {
     await handleRecommendationCallback(context.asContext(), {
       history,
       dishes: new DishRepositoryStub([]),
+      ai: new AIClientStub("{}"),
+      systemPrompt: "private prompt",
       now: new Date("2026-07-21T12:00:00.000Z"),
       generateId: () => "cook-1",
       random: () => 0
@@ -41,6 +50,8 @@ describe("recommendation callback", () => {
     await handleRecommendationCallback(context.asContext(), {
       history,
       dishes: new DishRepositoryStub([dishStatistics()]),
+      ai: new AIClientStub("{}"),
+      systemPrompt: "private prompt",
       now: new Date("2026-07-21T12:00:00.000Z"),
       generateId: () => "recommendation-2",
       random: () => 0
@@ -65,6 +76,50 @@ describe("recommendation callback", () => {
         }
       }
     ]);
+  });
+
+  it("saves an AI new idea without creating a cooking event", async () => {
+    const context = new CallbackContextStub("s:recommendation-1");
+    const dishes = new DishRepositoryStub([]);
+    const history = new HistoryRepositoryStub(recommendationWithIdea());
+
+    await handleRecommendationCallback(context.asContext(), {
+      history,
+      dishes,
+      ai: new AIClientStub("{}"),
+      systemPrompt: "private prompt",
+      now: new Date("2026-07-21T12:00:00.000Z"),
+      generateId: () => "new-dish-1",
+      random: () => 0
+    });
+
+    expect(dishes.created).toMatchObject([{ id: "new-dish-1", source: "ai" }]);
+    expect(history.cookEvents).toEqual([]);
+    expect(context.answers).toEqual([{ text: messages.newIdeaSaved }]);
+  });
+
+  it("saves and records cooking for an AI new idea", async () => {
+    const context = new CallbackContextStub("n:recommendation-1");
+    const dishes = new DishRepositoryStub([]);
+    const history = new HistoryRepositoryStub(recommendationWithIdea());
+    let id = 0;
+
+    await handleRecommendationCallback(context.asContext(), {
+      history,
+      dishes,
+      ai: new AIClientStub("{}"),
+      systemPrompt: "private prompt",
+      now: new Date("2026-07-21T12:00:00.000Z"),
+      generateId: () => {
+        id += 1;
+        return `id-${id}`;
+      },
+      random: () => 0
+    });
+
+    expect(dishes.created).toMatchObject([{ id: "id-1", source: "ai" }]);
+    expect(history.cookEvents).toMatchObject([{ dishId: "id-1", telegramCallbackQueryId: "callback-1" }]);
+    expect(context.answers).toEqual([{ text: messages.newIdeaSavedAndCooked }]);
   });
 });
 
@@ -103,15 +158,52 @@ function recommendation(): RecommendationEvent {
   };
 }
 
-class DishRepositoryStub implements RecommendationDishRepository {
+function recommendationWithIdea(): RecommendationEvent {
+  return {
+    ...recommendation(),
+    newIdeaJson: JSON.stringify({
+      name: "Lentil soup",
+      similarToDishIds: ["dish-1"],
+      whyItFits: "Simple option.",
+      ingredients: ["lentils", "carrot"],
+      prepMinutes: 30,
+      nutritionFocus: ["legumes"]
+    })
+  };
+}
+
+class DishRepositoryStub
+  implements DishRepository, RecommendationDishRepository, AIAssistedRecommendationDishRepository
+{
+  public readonly created: NewDish[] = [];
+
   public constructor(private readonly dishes: DishStatistics[]) {}
 
   public async listActiveWithStatistics(): Promise<DishStatistics[]> {
     return this.dishes;
   }
+
+  public async listActiveNames(): Promise<string[]> {
+    return this.dishes.map((dish) => dish.name);
+  }
+
+  public async findByNormalizedName(normalizedName: string): Promise<Dish | null> {
+    const dish = this.created.find((item) => item.normalizedName === normalizedName);
+    return dish === undefined ? null : { ...dish, isActive: true };
+  }
+
+  public async create(dish: NewDish): Promise<CreateDishResult> {
+    this.created.push(dish);
+    return { kind: "created", dish: { ...dish, isActive: true } };
+  }
 }
 
-class HistoryRepositoryStub implements ConfirmationHistoryRepository, RecommendationHistoryRepository {
+class HistoryRepositoryStub
+  implements
+    ConfirmationHistoryRepository,
+    RecommendationHistoryRepository,
+    AIAssistedRecommendationHistoryRepository
+{
   public readonly cookEvents: CookEvent[] = [];
   public readonly recommendations: RecommendationEvent[];
 
@@ -131,6 +223,18 @@ class HistoryRepositoryStub implements ConfirmationHistoryRepository, Recommenda
   public async createRecommendation(event: RecommendationEvent): Promise<RecommendationEvent> {
     this.recommendations.push(event);
     return event;
+  }
+
+  public async listRecentCooked(): Promise<[]> {
+    return [];
+  }
+}
+
+class AIClientStub implements AIRecommendationClient {
+  public constructor(private readonly response: string) {}
+
+  public async complete(): Promise<string> {
+    return this.response;
   }
 }
 

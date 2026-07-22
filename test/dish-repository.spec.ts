@@ -50,6 +50,22 @@ describe("D1DishRepository", () => {
     expect(found?.id).toBe(dish.id);
   });
 
+  it("returns only active catalog names within the requested limit", async () => {
+    const repository = new D1DishRepository(env.DB);
+    const inactiveDish: NewDish = {
+      ...dish,
+      id: "dish-inactive",
+      name: "Архивное блюдо",
+      normalizedName: "архивное блюдо"
+    };
+
+    await repository.create(dish);
+    await repository.create(inactiveDish);
+    await env.DB.prepare("UPDATE dishes SET is_active = 0 WHERE id = ?").bind(inactiveDish.id).run();
+
+    expect(await repository.listActiveNames(1)).toEqual([dish.name]);
+  });
+
   it("returns statistics for active dishes without overcounting cook events", async () => {
     const dishRepository = new D1DishRepository(env.DB);
     const historyRepository = new D1HistoryRepository(env.DB);

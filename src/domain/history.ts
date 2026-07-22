@@ -6,6 +6,11 @@ export interface CookEvent {
   telegramCallbackQueryId: string | null;
 }
 
+export interface RecentCookedDish {
+  name: string;
+  cookedAt: string;
+}
+
 export interface RecommendationEvent {
   id: string;
   primaryDishId: string;
