@@ -1,20 +1,29 @@
 import { Bot, type BotConfig, type Context } from "grammy";
 import type { DishRepository } from "../application/add-dish";
 import type { ConversationStateRepository } from "../application/conversation-state-repository";
+import type { ConfirmationHistoryRepository } from "../application/confirm-recommendation-cooked";
+import type {
+  RecommendationDishRepository,
+  RecommendationHistoryRepository
+} from "../application/get-fallback-recommendation";
 import type { AppConfig } from "../config";
 import { handleBeginAddDish } from "./handlers/begin-add-dish";
 import { handleCancelCommand } from "./handlers/cancel";
+import { handleRecommendationCallback } from "./handlers/confirm-recommendation-cooked";
 import { handleIdCommand } from "./handlers/id";
+import { handleRecommendDish } from "./handlers/recommend-dish";
 import { handleStartCommand } from "./handlers/start";
 import { handleAwaitingDishText } from "./handlers/save-awaiting-dish";
 import { messages } from "./messages";
 import { createAllowlistMiddleware } from "./middleware/allowlist";
 
 export interface CreateBotDependencies {
-  dishes: DishRepository;
+  dishes: DishRepository & RecommendationDishRepository;
+  history: RecommendationHistoryRepository & ConfirmationHistoryRepository;
   states: ConversationStateRepository;
   now?: () => Date;
   generateId?: () => string;
+  random?: () => number;
   client?: BotConfig<Context>["client"];
   botInfo?: BotConfig<Context>["botInfo"];
 }
@@ -36,6 +45,24 @@ export function createBot(
     handleBeginAddDish(context, {
       states: dependencies.states,
       now: (dependencies.now ?? (() => new Date()))()
+    })
+  );
+  bot.hears(messages.recommendDishButton, (context) =>
+    handleRecommendDish(context, {
+      dishes: dependencies.dishes,
+      history: dependencies.history,
+      now: (dependencies.now ?? (() => new Date()))(),
+      generateId: dependencies.generateId ?? crypto.randomUUID,
+      random: dependencies.random ?? Math.random
+    })
+  );
+  bot.on("callback_query", (context) =>
+    handleRecommendationCallback(context, {
+      dishes: dependencies.dishes,
+      history: dependencies.history,
+      now: (dependencies.now ?? (() => new Date()))(),
+      generateId: dependencies.generateId ?? crypto.randomUUID,
+      random: dependencies.random ?? Math.random
     })
   );
   bot.on("message:text", (context) =>

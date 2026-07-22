@@ -17,8 +17,10 @@ describe("/id", () => {
       {
         dishes: {
           findByNormalizedName: async () => null,
-          create: async (dish) => ({ kind: "created", dish: { ...dish, isActive: true } })
+          create: async (dish) => ({ kind: "created", dish: { ...dish, isActive: true } }),
+          listActiveWithStatistics: async () => []
         },
+        history: { createRecommendation: async (event) => event },
         states: {
           save: async (state) => state,
           findByUserId: async () => null,

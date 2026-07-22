@@ -15,6 +15,15 @@ export const messages = {
     NAME_TOO_LONG: "Название блюда должно содержать максимум 100 символов."
   },
   recommendDishButton: "🍽 Посоветовать блюдо",
+  confirmCookButton: "✅ Приготовили основное",
+  anotherRecommendationButton: "🔄 Другой совет",
+  anotherRecommendationReady: "Вот другой вариант.",
+  callbackUnavailable: "Это действие пока недоступно.",
+  cookAlreadyRecorded: "Приготовление уже отмечено.",
+  cookRecorded: "Отметил приготовление.",
+  recommendationEmpty: "В списке пока нет блюд. Сначала добавьте несколько знакомых вариантов.",
+  recommendationUnavailable: "Не удалось найти эту рекомендацию.",
+  fallbackRecommendation: (name: string): string => `🍽 Сегодня: ${name}`,
   userUnavailable: "Не удалось определить отправителя.",
   welcome: "Привет! Добавьте знакомое блюдо или попросите совет на сегодня.",
   yourTelegramId: (userId: string): string => `Ваш Telegram ID: ${userId}`

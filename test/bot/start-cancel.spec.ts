@@ -1,9 +1,12 @@
 import type { Update } from "grammy/types";
 import { describe, expect, it } from "vitest";
 import type { DishRepository } from "../../src/application/add-dish";
+import type { RecommendationDishRepository } from "../../src/application/get-fallback-recommendation";
 import { createBot } from "../../src/bot/create-bot";
 import type { ConversationState } from "../../src/domain/conversation-state";
 import type { Dish, NewDish } from "../../src/domain/dish";
+import type { DishStatistics } from "../../src/domain/dish";
+import type { RecommendationEvent } from "../../src/domain/history";
 
 describe("/start", () => {
   it("shows the persistent main keyboard to an allowed user", async () => {
@@ -67,6 +70,62 @@ describe("add dish button", () => {
   });
 });
 
+describe("recommend dish button", () => {
+  it("explains how to proceed when the catalog is empty", async () => {
+    const telegram = new TelegramApiStub();
+    const bot = createTestBot(telegram, new StateRepositoryStub());
+
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+
+    expect(telegram.sentMessages).toEqual([
+      {
+        chat_id: 123,
+        text: "В списке пока нет блюд. Сначала добавьте несколько знакомых вариантов."
+      }
+    ]);
+  });
+
+  it("sends a fallback recommendation and records it", async () => {
+    const telegram = new TelegramApiStub();
+    const dishes = new DishRepositoryStub([
+      dishStatistics({ id: "dish-1", name: "Омлет" })
+    ]);
+    const history = new HistoryRepositoryStub();
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      () => new Date("2026-07-21T12:00:00.000Z"),
+      dishes,
+      () => "recommendation-1",
+      history
+    );
+
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+
+    expect(telegram.sentMessages).toEqual([
+      {
+        chat_id: 123,
+        text: "🍽 Сегодня: Омлет",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✅ Приготовили основное", callback_data: "c:recommendation-1" }],
+            [{ text: "🔄 Другой совет", callback_data: "a:recommendation-1" }]
+          ]
+        }
+      }
+    ]);
+    expect(history.recommendations).toEqual([
+      {
+        id: "recommendation-1",
+        primaryDishId: "dish-1",
+        newIdeaJson: null,
+        requestedByUserId: "123",
+        createdAt: "2026-07-21T12:00:00.000Z"
+      }
+    ]);
+  });
+});
+
 describe("awaiting dish message", () => {
   it("adds the next text message and confirms it", async () => {
     const telegram = new TelegramApiStub();
@@ -99,8 +158,9 @@ function createTestBot(
   telegram: TelegramApiStub,
   states: StateRepositoryStub,
   now?: () => Date,
-  dishes: DishRepository = new DishRepositoryStub(),
-  generateId?: () => string
+  dishes: DishRepository & RecommendationDishRepository = new DishRepositoryStub(),
+  generateId?: () => string,
+  history: HistoryRepositoryStub = new HistoryRepositoryStub()
 ) {
   return createBot(
     {
@@ -112,6 +172,7 @@ function createTestBot(
     },
     {
       dishes,
+      history,
       states,
       now,
       generateId,
@@ -186,6 +247,8 @@ class StateRepositoryStub {
 class DishRepositoryStub implements DishRepository {
   public readonly createdDishes: NewDish[] = [];
 
+  public constructor(private readonly statistics: DishStatistics[] = []) {}
+
   public async create(dish: NewDish): Promise<{ kind: "created"; dish: Dish }> {
     this.createdDishes.push(dish);
     return { kind: "created", dish: { ...dish, isActive: true } };
@@ -194,6 +257,37 @@ class DishRepositoryStub implements DishRepository {
   public async findByNormalizedName(): Promise<Dish | null> {
     return null;
   }
+
+  public async listActiveWithStatistics(): Promise<DishStatistics[]> {
+    return this.statistics;
+  }
+}
+
+class HistoryRepositoryStub {
+  public readonly recommendations: RecommendationEvent[] = [];
+
+  public async createRecommendation(event: RecommendationEvent): Promise<RecommendationEvent> {
+    this.recommendations.push(event);
+    return event;
+  }
+}
+
+function dishStatistics(overrides: Partial<DishStatistics>): DishStatistics {
+  return {
+    id: "dish-1",
+    name: "Омлет",
+    normalizedName: "омлет",
+    details: null,
+    source: "user",
+    isActive: true,
+    createdByUserId: "123",
+    createdAt: "2026-07-01T12:00:00.000Z",
+    updatedAt: "2026-07-01T12:00:00.000Z",
+    lastCookedAt: null,
+    timesCooked: 0,
+    lastRecommendedAt: null,
+    ...overrides
+  };
 }
 
 class TelegramApiStub {
