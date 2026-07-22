@@ -33,6 +33,14 @@ export class AIClient {
   public async complete(request: AICompletionRequest): Promise<string> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeoutMs);
+    const startedAt = Date.now();
+    const body = JSON.stringify({
+      model: this.config.model,
+      messages: [
+        { role: "system", content: request.systemPrompt },
+        { role: "user", content: JSON.stringify(request.input) }
+      ]
+    });
 
     try {
       const response = await this.fetchFn(getChatCompletionsUrl(this.config.baseUrl), {
@@ -41,13 +49,7 @@ export class AIClient {
           Authorization: `Bearer ${this.config.apiKey}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          model: this.config.model,
-          messages: [
-            { role: "system", content: request.systemPrompt },
-            { role: "user", content: JSON.stringify(request.input) }
-          ]
-        }),
+        body,
         signal: controller.signal
       });
 
@@ -65,14 +67,14 @@ export class AIClient {
       return result.data.choices[0].message.content;
     } catch (error: unknown) {
       if (controller.signal.aborted) {
-        throw new AITimeoutError(this.config.timeoutMs, error);
+        throw new AITimeoutError(this.config.timeoutMs, error, body.length);
       }
 
       if (error instanceof AIHttpError || error instanceof AIInvalidResponseError) {
         throw error;
       }
 
-      throw new AINetworkError(error);
+      throw new AINetworkError(error, Date.now() - startedAt, body.length);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -104,7 +106,7 @@ export class AIInvalidResponseError extends Error {
 export class AITimeoutError extends Error {
   public readonly code = "AI_TIMEOUT";
 
-  public constructor(timeoutMs: number, cause: unknown) {
+  public constructor(timeoutMs: number, cause: unknown, public readonly payloadBytes = 0) {
     super(`AI request timed out after ${timeoutMs}ms`, { cause });
     this.name = "AITimeoutError";
   }
@@ -113,7 +115,11 @@ export class AITimeoutError extends Error {
 export class AINetworkError extends Error {
   public readonly code = "AI_NETWORK_ERROR";
 
-  public constructor(cause: unknown) {
+  public constructor(
+    cause: unknown,
+    public readonly durationMs = 0,
+    public readonly payloadBytes = 0
+  ) {
     super("AI request failed", { cause });
     this.name = "AINetworkError";
   }

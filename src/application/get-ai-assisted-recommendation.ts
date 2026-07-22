@@ -36,6 +36,7 @@ export interface GetAIAssistedRecommendationDependencies {
   now: Date;
   generateId: () => string;
   random: () => number;
+  onAIFallback?: (error: unknown) => void;
 }
 
 export type GetAIAssistedRecommendationResult =
@@ -107,7 +108,8 @@ async function getAIResult(
     await validateNewIdea(response, candidates, dependencies.dishes);
 
     return { dish, response };
-  } catch {
+  } catch (error: unknown) {
+    dependencies.onAIFallback?.(error);
     return null;
   }
 }

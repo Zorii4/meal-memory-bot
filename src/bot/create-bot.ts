@@ -35,6 +35,7 @@ export interface CreateBotDependencies {
   now?: () => Date;
   generateId?: () => string;
   random?: () => number;
+  onAIFallback?: (error: unknown) => void;
   client?: BotConfig<Context>["client"];
   botInfo?: BotConfig<Context>["botInfo"];
 }
@@ -65,8 +66,9 @@ export function createBot(
       ai: dependencies.ai,
       systemPrompt: dependencies.systemPrompt,
       now: (dependencies.now ?? (() => new Date()))(),
-      generateId: dependencies.generateId ?? crypto.randomUUID,
-      random: dependencies.random ?? Math.random
+      generateId: dependencies.generateId ?? (() => crypto.randomUUID()),
+      random: dependencies.random ?? Math.random,
+      onAIFallback: dependencies.onAIFallback
     })
   );
   bot.on("callback_query", (context) =>
@@ -76,8 +78,9 @@ export function createBot(
       ai: dependencies.ai,
       systemPrompt: dependencies.systemPrompt,
       now: (dependencies.now ?? (() => new Date()))(),
-      generateId: dependencies.generateId ?? crypto.randomUUID,
-      random: dependencies.random ?? Math.random
+      generateId: dependencies.generateId ?? (() => crypto.randomUUID()),
+      random: dependencies.random ?? Math.random,
+      onAIFallback: dependencies.onAIFallback
     })
   );
   bot.on("message:text", (context) =>
@@ -85,7 +88,7 @@ export function createBot(
       dishes: dependencies.dishes,
       states: dependencies.states,
       now: (dependencies.now ?? (() => new Date()))(),
-      generateId: dependencies.generateId ?? crypto.randomUUID
+      generateId: dependencies.generateId ?? (() => crypto.randomUUID())
     })
   );
 

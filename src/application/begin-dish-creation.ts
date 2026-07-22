@@ -1,7 +1,7 @@
 import type { ConversationState } from "../domain/conversation-state";
 import type { ConversationStateRepository } from "./conversation-state-repository";
 
-const AWAITING_DISH_DURATION_MS = 15 * 60 * 1_000;
+const AWAITING_DISH_DURATION_MS = 5 * 60 * 1_000;
 
 export interface BeginDishCreationDependencies {
   states: ConversationStateRepository;

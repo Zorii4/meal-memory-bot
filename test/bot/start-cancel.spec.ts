@@ -49,7 +49,7 @@ describe("/cancel", () => {
 });
 
 describe("add dish button", () => {
-  it("starts a 15-minute awaiting_dish state", async () => {
+  it("starts a 5-minute awaiting_dish state", async () => {
     const telegram = new TelegramApiStub();
     const states = new StateRepositoryStub();
     const bot = createTestBot(telegram, states, () => new Date("2026-07-21T12:00:00.000Z"));
@@ -60,7 +60,7 @@ describe("add dish button", () => {
       {
         telegramUserId: "123",
         state: "awaiting_dish",
-        expiresAt: "2026-07-21T12:15:00.000Z",
+        expiresAt: "2026-07-21T12:05:00.000Z",
         updatedAt: "2026-07-21T12:00:00.000Z"
       }
     ]);
@@ -68,7 +68,7 @@ describe("add dish button", () => {
       {
         chat_id: 123,
         text:
-          "Пришлите блюдо одним сообщением: первая строка — название, остальные — ингредиенты или комментарий. Для отмены используйте /cancel."
+          "Пришлите блюдо одним сообщением: первая строка — название, остальные — ингредиенты или комментарий (необязательно). Для отмены используйте /cancel."
       }
     ]);
   });

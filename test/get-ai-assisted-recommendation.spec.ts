@@ -76,6 +76,25 @@ describe("getAIAssistedRecommendationForUser", () => {
     expect(result).toMatchObject({ kind: "recommended", source: "fallback", aiResponse: null });
   });
 
+  it("reports the fallback reason without changing the result", async () => {
+    const errors: unknown[] = [];
+    const result = await getAIAssistedRecommendationForUser(
+      "123",
+      {
+        ...dependencies(
+          new DishRepositoryStub([dish("dish-1")]),
+          new HistoryRepositoryStub(),
+          new AIClientStub("{")
+        ),
+        onAIFallback: (error: unknown) => errors.push(error)
+      }
+    );
+
+    expect(result).toMatchObject({ kind: "recommended", source: "fallback", aiResponse: null });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ code: "AI_RESPONSE_INVALID_JSON" });
+  });
+
   it("falls back when the AI new idea already exists", async () => {
     const dishes = new DishRepositoryStub(
       [dish("dish-1")],

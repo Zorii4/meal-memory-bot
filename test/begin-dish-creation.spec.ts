@@ -6,7 +6,7 @@ import type { ConversationStateRepository } from "../src/application/cancel-conv
 import type { ConversationState } from "../src/domain/conversation-state";
 
 describe("beginDishCreation", () => {
-  it("saves an awaiting_dish state that expires after 15 minutes", async () => {
+  it("saves an awaiting_dish state that expires after 5 minutes", async () => {
     const states = new StateRepositoryStub();
 
     const result = await beginDishCreation("123", {
@@ -17,7 +17,7 @@ describe("beginDishCreation", () => {
     expect(result).toEqual({
       telegramUserId: "123",
       state: "awaiting_dish",
-      expiresAt: "2026-07-21T12:15:00.000Z",
+      expiresAt: "2026-07-21T12:05:00.000Z",
       updatedAt: "2026-07-21T12:00:00.000Z"
     });
     expect(states.savedStates).toEqual([result]);

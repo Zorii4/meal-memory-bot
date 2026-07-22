@@ -1,5 +1,5 @@
-import type { Update } from "grammy/types";
 import { createBot } from "./bot/create-bot";
+import { handleWebhookUpdate } from "./bot/handle-webhook-update";
 import { parseConfig } from "./config";
 import { AIClient } from "./infrastructure/ai/ai-client";
 import { recommendationSystemPrompt } from "./infrastructure/ai/prompts/recommendation.local";
@@ -34,7 +34,18 @@ const worker: ExportedHandler<WorkerEnv> = {
         return new Response("Unauthorized", { status: 401 });
       }
 
-      ctx.waitUntil(processTelegramWebhook(request, env));
+      let update: unknown;
+
+      try {
+        update = await request.json();
+      } catch (error: unknown) {
+        logWebhookProcessingError(error);
+        return new Response(null, { status: 200 });
+      }
+
+      ctx.waitUntil(
+        processTelegramUpdate(update, env).catch(logWebhookProcessingError)
+      );
 
       return new Response(null, { status: 200 });
     }
@@ -45,32 +56,55 @@ const worker: ExportedHandler<WorkerEnv> = {
 
 export default worker;
 
-async function processTelegramWebhook(request: Request, env: WorkerEnv): Promise<void> {
-  try {
-    const update: unknown = await request.json();
-    const config = parseConfig(env);
-    const dishes = new D1DishRepository(env.DB);
-    const history = new D1HistoryRepository(env.DB);
-    const states = new D1StateRepository(env.DB);
-    const ai = new AIClient(config.ai);
-    const bot = createBot(config, {
-      dishes,
-      history,
-      states,
-      ai,
-      systemPrompt: recommendationSystemPrompt
-    });
+async function processTelegramUpdate(update: unknown, env: WorkerEnv): Promise<void> {
+  const config = parseConfig(env);
+  const dishes = new D1DishRepository(env.DB);
+  const history = new D1HistoryRepository(env.DB);
+  const states = new D1StateRepository(env.DB);
+  const ai = new AIClient(config.ai);
+  const bot = createBot(config, {
+    dishes,
+    history,
+    states,
+    ai,
+    systemPrompt: recommendationSystemPrompt,
+    onAIFallback: logAIFallback
+  });
 
-    await bot.handleUpdate(update as Update);
-  } catch (error: unknown) {
-    console.error(
-      JSON.stringify({
-        event: "telegram_webhook_processing_failed",
-        errorCode: getErrorCode(error),
-        errorName: error instanceof Error ? error.name : "UnknownError"
-      })
-    );
+  await handleWebhookUpdate(bot, update as Parameters<typeof handleWebhookUpdate>[1]);
+}
+
+function logWebhookProcessingError(error: unknown): void {
+  console.error(
+    JSON.stringify({
+      event: "telegram_webhook_processing_failed",
+      errorCode: getErrorCode(error),
+      errorName: error instanceof Error ? error.name : "UnknownError"
+    })
+  );
+}
+
+function logAIFallback(error: unknown): void {
+  console.error(
+    JSON.stringify({
+      event: "ai_recommendation_fallback",
+      errorCode: getErrorCode(error),
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      causeName: error instanceof Error && error.cause instanceof Error ? error.cause.name : null,
+      durationMs: getNumericProperty(error, "durationMs"),
+      payloadBytes: getNumericProperty(error, "payloadBytes")
+    })
+  );
+}
+
+function getNumericProperty(value: unknown, key: string): number | null {
+  if (typeof value !== "object" || value === null || !(key in value)) {
+    return null;
   }
+
+  const property = (value as Record<string, unknown>)[key];
+
+  return typeof property === "number" ? property : null;
 }
 
 function getErrorCode(error: unknown): string {
