@@ -66,6 +66,74 @@ describe("D1DishRepository", () => {
     expect(await repository.listActiveNames(1)).toEqual([dish.name]);
   });
 
+  it("returns an alphabetically ordered page of active catalog dishes", async () => {
+    const repository = new D1DishRepository(env.DB);
+    const secondDish: NewDish = {
+      ...dish,
+      id: "dish-catalog-2",
+      name: "Борщ",
+      normalizedName: "борщ"
+    };
+    const thirdDish: NewDish = {
+      ...dish,
+      id: "dish-catalog-3",
+      name: "Омлет",
+      normalizedName: "омлет"
+    };
+
+    await repository.create(dish);
+    await repository.create(secondDish);
+    await repository.create(thirdDish);
+
+    expect(await repository.listActiveCatalogPage(2, 1)).toEqual([
+      { id: dish.id, name: dish.name },
+      { id: thirdDish.id, name: thirdDish.name }
+    ]);
+  });
+
+  it("finds only an active dish for manual catalog cooking", async () => {
+    const repository = new D1DishRepository(env.DB);
+    await repository.create(dish);
+
+    expect(await repository.findActiveCatalogDishById(dish.id)).toEqual({
+      id: dish.id,
+      name: dish.name
+    });
+
+    await env.DB.prepare("UPDATE dishes SET is_active = 0 WHERE id = ?").bind(dish.id).run();
+
+    expect(await repository.findActiveCatalogDishById(dish.id)).toBeNull();
+  });
+
+  it("deletes a dish and its related cook and recommendation history", async () => {
+    const dishRepository = new D1DishRepository(env.DB);
+    const historyRepository = new D1HistoryRepository(env.DB);
+    await dishRepository.create(dish);
+    await historyRepository.recordCook({
+      id: "cook-delete-1",
+      dishId: dish.id,
+      cookedByUserId: "123456",
+      cookedAt: "2026-07-21T18:00:00.000Z",
+      telegramCallbackQueryId: "callback-delete-1"
+    });
+    await historyRepository.createRecommendation({
+      id: "recommendation-delete-1",
+      primaryDishId: dish.id,
+      newIdeaJson: null,
+      requestedByUserId: "123456",
+      createdAt: "2026-07-21T18:00:00.000Z"
+    });
+
+    expect(await dishRepository.deleteActiveCatalogDishById(dish.id)).toBe(true);
+    expect(await dishRepository.findByNormalizedName(dish.normalizedName)).toBeNull();
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM cook_events WHERE dish_id = ?").bind(dish.id).first<{ count: number }>()
+    ).toEqual({ count: 0 });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM recommendation_events WHERE primary_dish_id = ?").bind(dish.id).first<{ count: number }>()
+    ).toEqual({ count: 0 });
+  });
+
   it("returns statistics for active dishes without overcounting cook events", async () => {
     const dishRepository = new D1DishRepository(env.DB);
     const historyRepository = new D1HistoryRepository(env.DB);

@@ -5,5 +5,7 @@ export const mainKeyboard = new Keyboard()
   .text(messages.addDishButton)
   .row()
   .text(messages.recommendDishButton)
+  .row()
+  .text(messages.catalogButton)
   .resized()
   .persistent();

@@ -28,6 +28,15 @@ describe("allowlist", () => {
 
     expect(telegram.sentTexts).toEqual(["У вас нет доступа к этому боту."]);
   });
+
+  it("blocks an unauthorized catalog callback before it can change data", async () => {
+    const telegram = new TelegramApiStub();
+    const bot = createTestBot(telegram);
+
+    await bot.handleUpdate(createCatalogCallbackUpdate(999, "d:dish-1"));
+
+    expect(telegram.sentTexts).toEqual(["У вас нет доступа к этому боту."]);
+  });
 });
 
 function createTestBot(telegram: TelegramApiStub) {
@@ -89,6 +98,23 @@ function createTextUpdate(userId: number, text: string): Update {
       from: { id: userId, is_bot: false, first_name: "Test" },
       text,
       entities: [{ offset: 0, length: text.length, type: "bot_command" }]
+    }
+  };
+}
+
+function createCatalogCallbackUpdate(userId: number, data: string): Update {
+  return {
+    update_id: 1,
+    callback_query: {
+      id: "callback-1",
+      from: { id: userId, is_bot: false, first_name: "Test" },
+      chat_instance: "chat-instance",
+      data,
+      message: {
+        message_id: 1,
+        date: 0,
+        chat: { id: userId, type: "private", first_name: "Test" }
+      }
     }
   };
 }

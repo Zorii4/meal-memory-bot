@@ -1,6 +1,9 @@
 import { Bot, type BotConfig, type Context } from "grammy";
 import type { DishRepository } from "../application/add-dish";
 import type { ConversationStateRepository } from "../application/conversation-state-repository";
+import type { CatalogDishRepository } from "../application/get-dish-catalog-page";
+import type { CatalogCookDishRepository } from "../application/record-catalog-dish-cooked";
+import type { CatalogDeleteDishRepository } from "../application/delete-catalog-dish";
 import type { ConfirmationHistoryRepository } from "../application/confirm-recommendation-cooked";
 import type { NewIdeaHistoryRepository } from "../application/save-ai-recommendation-idea";
 import type {
@@ -20,11 +23,25 @@ import { handleIdCommand } from "./handlers/id";
 import { handleRecommendDish } from "./handlers/recommend-dish";
 import { handleStartCommand } from "./handlers/start";
 import { handleAwaitingDishText } from "./handlers/save-awaiting-dish";
+import {
+  handleCatalogPageCallback,
+  handleCatalogCookCallback,
+  handleCatalogDeleteCancelCallback,
+  handleCatalogDeleteConfirmationCallback,
+  handleCatalogDeleteRequestCallback,
+  handleShowDishCatalog
+} from "./handlers/show-dish-catalog";
+import { parseCatalogCallbackData } from "./catalog-callback-data";
 import { messages } from "./messages";
 import { createAllowlistMiddleware } from "./middleware/allowlist";
 
 export interface CreateBotDependencies {
-  dishes: DishRepository & RecommendationDishRepository & AIAssistedRecommendationDishRepository;
+  dishes: DishRepository &
+    RecommendationDishRepository &
+    AIAssistedRecommendationDishRepository &
+    CatalogDishRepository &
+    CatalogCookDishRepository &
+    CatalogDeleteDishRepository;
   history: RecommendationHistoryRepository &
     ConfirmationHistoryRepository &
     AIAssistedRecommendationHistoryRepository &
@@ -71,8 +88,47 @@ export function createBot(
       onAIFallback: dependencies.onAIFallback
     })
   );
-  bot.on("callback_query", (context) =>
-    handleRecommendationCallback(context, {
+  bot.hears(messages.catalogButton, (context) =>
+    handleShowDishCatalog(context, { dishes: dependencies.dishes })
+  );
+  bot.on("callback_query", async (context) => {
+    const catalogCallback = parseCatalogCallbackData(context.callbackQuery.data);
+
+    if (catalogCallback !== null) {
+      if (catalogCallback.kind === "page") {
+        await handleCatalogPageCallback(context, catalogCallback.value.page, { dishes: dependencies.dishes });
+        return;
+      }
+
+      if (catalogCallback.kind === "cook") {
+        await handleCatalogCookCallback(context, catalogCallback.value.dishId, {
+          dishes: dependencies.dishes,
+          history: dependencies.history,
+          now: (dependencies.now ?? (() => new Date()))(),
+          generateId: dependencies.generateId ?? (() => crypto.randomUUID())
+        });
+        return;
+      }
+
+      if (catalogCallback.kind === "request-delete") {
+        await handleCatalogDeleteRequestCallback(context, catalogCallback.value.dishId, {
+          dishes: dependencies.dishes
+        });
+        return;
+      }
+
+      if (catalogCallback.kind === "confirm-delete") {
+        await handleCatalogDeleteConfirmationCallback(context, catalogCallback.value.dishId, {
+          dishes: dependencies.dishes
+        });
+        return;
+      }
+
+      await handleCatalogDeleteCancelCallback(context);
+      return;
+    }
+
+    await handleRecommendationCallback(context, {
       dishes: dependencies.dishes,
       history: dependencies.history,
       ai: dependencies.ai,
@@ -81,8 +137,8 @@ export function createBot(
       generateId: dependencies.generateId ?? (() => crypto.randomUUID()),
       random: dependencies.random ?? Math.random,
       onAIFallback: dependencies.onAIFallback
-    })
-  );
+    });
+  });
   bot.on("message:text", (context) =>
     handleAwaitingDishText(context, {
       dishes: dependencies.dishes,

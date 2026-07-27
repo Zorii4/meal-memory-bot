@@ -18,6 +18,11 @@ interface DishStatisticsRow extends DishRow {
   last_recommended_at: string | null;
 }
 
+interface CatalogDishRow {
+  id: string;
+  name: string;
+}
+
 export type CreateDishResult =
   | { kind: "created"; dish: Dish }
   | { kind: "duplicate" };
@@ -137,6 +142,41 @@ export class D1DishRepository {
       .all<{ name: string }>();
 
     return result.results.map((row) => row.name);
+  }
+
+  public async listActiveCatalogPage(limit: number, offset: number): Promise<CatalogDishRow[]> {
+    const result = await this.db
+      .prepare(
+        `SELECT id, name
+        FROM dishes
+        WHERE is_active = 1
+        ORDER BY name COLLATE NOCASE ASC, id ASC
+        LIMIT ? OFFSET ?`
+      )
+      .bind(limit, offset)
+      .all<CatalogDishRow>();
+
+    return result.results;
+  }
+
+  public async findActiveCatalogDishById(id: string): Promise<CatalogDishRow | null> {
+    return this.db
+      .prepare(
+        `SELECT id, name
+        FROM dishes
+        WHERE id = ? AND is_active = 1`
+      )
+      .bind(id)
+      .first<CatalogDishRow>();
+  }
+
+  public async deleteActiveCatalogDishById(id: string): Promise<boolean> {
+    const result = await this.db
+      .prepare("DELETE FROM dishes WHERE id = ? AND is_active = 1")
+      .bind(id)
+      .run();
+
+    return result.meta.changes > 0;
   }
 }
 

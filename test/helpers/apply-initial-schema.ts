@@ -1,4 +1,5 @@
 import initialSchema from "../../migrations/0001_initial_schema.sql?raw";
+import deleteDishRelatedHistory from "../../migrations/0002_delete_dish_related_history.sql?raw";
 
 export async function applyInitialSchema(db: D1Database): Promise<void> {
   const statements = initialSchema
@@ -6,8 +7,14 @@ export async function applyInitialSchema(db: D1Database): Promise<void> {
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0)
     .filter((statement) => !statement.startsWith("PRAGMA"));
+  const deleteDishTrigger = deleteDishRelatedHistory
+    .replace(/^PRAGMA foreign_keys = ON;\s*/m, "")
+    .trim();
 
-  await db.batch(statements.map((statement) => db.prepare(statement)));
+  await db.batch([
+    ...statements.map((statement) => db.prepare(statement)),
+    db.prepare(deleteDishTrigger)
+  ]);
 }
 
 export async function resetDatabase(db: D1Database): Promise<void> {

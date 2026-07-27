@@ -10,7 +10,7 @@ import { createBot } from "../../src/bot/create-bot";
 import type { ConversationState } from "../../src/domain/conversation-state";
 import type { Dish, NewDish } from "../../src/domain/dish";
 import type { DishStatistics } from "../../src/domain/dish";
-import type { RecentCookedDish, RecommendationEvent } from "../../src/domain/history";
+import type { CookEvent, RecentCookedDish, RecommendationEvent } from "../../src/domain/history";
 
 describe("/start", () => {
   it("shows the persistent main keyboard to an allowed user", async () => {
@@ -24,7 +24,11 @@ describe("/start", () => {
         chat_id: 123,
         text: "Привет! Добавьте знакомое блюдо или попросите совет на сегодня.",
         reply_markup: {
-          keyboard: [[{ text: "➕ Добавить блюдо" }], [{ text: "🍽 Посоветовать блюдо" }]],
+          keyboard: [
+            [{ text: "➕ Добавить блюдо" }],
+            [{ text: "🍽 Посоветовать блюдо" }],
+            [{ text: "📚 Мои блюда" }]
+          ],
           resize_keyboard: true,
           is_persistent: true
         }
@@ -70,6 +74,164 @@ describe("add dish button", () => {
         text:
           "Пришлите блюдо одним сообщением: первая строка — название, остальные — ингредиенты или комментарий (необязательно). Для отмены используйте /cancel."
       }
+    ]);
+  });
+});
+
+describe("dish catalog button", () => {
+  it("shows the first catalog page and navigation", async () => {
+    const telegram = new TelegramApiStub();
+    const dishes = new DishRepositoryStub(
+      Array.from({ length: 9 }, (_, index) =>
+        dishStatistics({ id: `dish-${index + 1}`, name: `Блюдо ${index + 1}` })
+      )
+    );
+    const bot = createTestBot(telegram, new StateRepositoryStub(), undefined, dishes);
+
+    await bot.handleUpdate(createTextUpdate(123, "📚 Мои блюда"));
+
+    expect(telegram.sentMessages).toEqual([
+      {
+        chat_id: 123,
+        text:
+          "📚 Мои блюда — страница 1\n\n1. Блюдо 1\n2. Блюдо 2\n3. Блюдо 3\n4. Блюдо 4\n5. Блюдо 5\n6. Блюдо 6\n7. Блюдо 7\n8. Блюдо 8",
+        reply_markup: {
+          inline_keyboard: catalogKeyboard(["dish-1", "dish-2", "dish-3", "dish-4", "dish-5", "dish-6", "dish-7", "dish-8"], [
+            { text: "▶️", callback_data: "p:1" }
+          ])
+        }
+      }
+    ]);
+  });
+
+  it("answers the page callback and sends the requested page", async () => {
+    const telegram = new TelegramApiStub();
+    const dishes = new DishRepositoryStub(
+      Array.from({ length: 9 }, (_, index) =>
+        dishStatistics({ id: `dish-${index + 1}`, name: `Блюдо ${index + 1}` })
+      )
+    );
+    const bot = createTestBot(telegram, new StateRepositoryStub(), undefined, dishes);
+
+    await bot.handleUpdate(createCallbackUpdate(123, "p:1"));
+
+    expect(telegram.sentMessages).toEqual([
+      { callback_query_id: "callback-1" },
+      {
+        chat_id: 123,
+        text: "📚 Мои блюда — страница 2\n\n1. Блюдо 9",
+        reply_markup: {
+          inline_keyboard: catalogKeyboard(["dish-9"], [{ text: "◀️", callback_data: "p:0" }])
+        }
+      }
+    ]);
+  });
+
+  it("records cooking for the selected catalog dish", async () => {
+    const telegram = new TelegramApiStub();
+    const history = new HistoryRepositoryStub();
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      () => new Date("2026-07-27T12:00:00.000Z"),
+      new DishRepositoryStub([dishStatistics({ id: "dish-1" })]),
+      () => "cook-1",
+      history
+    );
+
+    await bot.handleUpdate(createCallbackUpdate(123, "m:dish-1"));
+
+    expect(history.cookEvents).toEqual([
+      {
+        id: "cook-1",
+        dishId: "dish-1",
+        cookedByUserId: "123",
+        cookedAt: "2026-07-27T12:00:00.000Z",
+        telegramCallbackQueryId: "callback-1"
+      }
+    ]);
+    expect(telegram.sentMessages).toEqual([
+      { callback_query_id: "callback-1", text: "Отметил приготовление." }
+    ]);
+  });
+
+  it("does not duplicate cooking when Telegram repeats the callback", async () => {
+    const telegram = new TelegramApiStub();
+    const history = new HistoryRepositoryStub();
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      () => new Date("2026-07-27T12:00:00.000Z"),
+      new DishRepositoryStub([dishStatistics({ id: "dish-1" })]),
+      () => "cook-1",
+      history
+    );
+
+    await bot.handleUpdate(createCallbackUpdate(123, "m:dish-1"));
+    await bot.handleUpdate(createCallbackUpdate(123, "m:dish-1"));
+
+    expect(history.cookEvents).toHaveLength(1);
+    expect(telegram.sentMessages).toEqual([
+      { callback_query_id: "callback-1", text: "Отметил приготовление." },
+      { callback_query_id: "callback-1", text: "Приготовление уже отмечено." }
+    ]);
+  });
+
+  it("asks for confirmation before deleting a catalog dish", async () => {
+    const telegram = new TelegramApiStub();
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      undefined,
+      new DishRepositoryStub([dishStatistics({ id: "dish-1", name: "Омлет" })])
+    );
+
+    await bot.handleUpdate(createCallbackUpdate(123, "d:dish-1"));
+
+    expect(telegram.sentMessages).toEqual([
+      { callback_query_id: "callback-1" },
+      {
+        chat_id: 123,
+        text:
+          "Удалить блюдо «Омлет» навсегда? Вместе с ним будут удалены связанные отметки приготовления и рекомендации.",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "🗑 Удалить навсегда", callback_data: "x:dish-1" },
+              { text: "Отмена", callback_data: "k:dish-1" }
+            ]
+          ]
+        }
+      }
+    ]);
+  });
+
+  it("deletes a catalog dish only after explicit confirmation", async () => {
+    const telegram = new TelegramApiStub();
+    const dishes = new DishRepositoryStub([dishStatistics({ id: "dish-1", name: "Омлет" })]);
+    const bot = createTestBot(telegram, new StateRepositoryStub(), undefined, dishes);
+
+    await bot.handleUpdate(createCallbackUpdate(123, "x:dish-1"));
+
+    expect(await dishes.findActiveCatalogDishById("dish-1")).toBeNull();
+    expect(telegram.sentMessages).toEqual([
+      {
+        callback_query_id: "callback-1",
+        text: "Блюдо и связанные с ним записи истории удалены."
+      }
+    ]);
+  });
+
+  it("does not delete a catalog dish when deletion is cancelled", async () => {
+    const telegram = new TelegramApiStub();
+    const dishes = new DishRepositoryStub([dishStatistics({ id: "dish-1", name: "Омлет" })]);
+    const bot = createTestBot(telegram, new StateRepositoryStub(), undefined, dishes);
+
+    await bot.handleUpdate(createCallbackUpdate(123, "k:dish-1"));
+
+    expect(await dishes.findActiveCatalogDishById("dish-1")).toEqual({ id: "dish-1", name: "Омлет" });
+    expect(telegram.sentMessages).toEqual([
+      { callback_query_id: "callback-1", text: "Удаление отменено." }
     ]);
   });
 });
@@ -302,6 +464,23 @@ function createTextUpdate(userId: number, text: string): Update {
   };
 }
 
+function createCallbackUpdate(userId: number, data: string): Update {
+  return {
+    update_id: 1,
+    callback_query: {
+      id: "callback-1",
+      from: { id: userId, is_bot: false, first_name: "Test" },
+      chat_instance: "chat-instance",
+      data,
+      message: {
+        message_id: 1,
+        date: 0,
+        chat: { id: userId, type: "private", first_name: "Test" }
+      }
+    }
+  };
+}
+
 class StateRepositoryStub {
   public readonly clearedUserIds: string[] = [];
   public readonly savedStates: ConversationState[] = [];
@@ -344,10 +523,38 @@ class DishRepositoryStub implements DishRepository {
   public async listActiveNames(): Promise<string[]> {
     return this.statistics.map((dish) => dish.name);
   }
+
+  public async listActiveCatalogPage(
+    limit: number,
+    offset: number
+  ): Promise<Array<{ id: string; name: string }>> {
+    return [...this.statistics]
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .slice(offset, offset + limit)
+      .map(({ id, name }) => ({ id, name }));
+  }
+
+  public async findActiveCatalogDishById(id: string): Promise<{ id: string; name: string } | null> {
+    const dish = this.statistics.find((item) => item.id === id && item.isActive);
+
+    return dish === undefined ? null : { id: dish.id, name: dish.name };
+  }
+
+  public async deleteActiveCatalogDishById(id: string): Promise<boolean> {
+    const index = this.statistics.findIndex((dish) => dish.id === id && dish.isActive);
+
+    if (index === -1) {
+      return false;
+    }
+
+    this.statistics.splice(index, 1);
+    return true;
+  }
 }
 
 class HistoryRepositoryStub {
   public readonly recommendations: RecommendationEvent[] = [];
+  public readonly cookEvents: CookEvent[] = [];
 
   public async createRecommendation(event: RecommendationEvent): Promise<RecommendationEvent> {
     this.recommendations.push(event);
@@ -357,6 +564,34 @@ class HistoryRepositoryStub {
   public async listRecentCooked(): Promise<RecentCookedDish[]> {
     return [];
   }
+
+  public async recordCook(
+    event: CookEvent
+  ): Promise<{ kind: "created"; event: CookEvent } | { kind: "duplicate" }> {
+    if (
+      this.cookEvents.some(
+        (existingEvent) => existingEvent.telegramCallbackQueryId === event.telegramCallbackQueryId
+      )
+    ) {
+      return { kind: "duplicate" };
+    }
+
+    this.cookEvents.push(event);
+    return { kind: "created", event };
+  }
+}
+
+function catalogKeyboard(
+  dishIds: string[],
+  navigation: Array<{ text: string; callback_data: string }>
+): Array<Array<{ text: string; callback_data: string }>> {
+  return [
+    ...dishIds.map((dishId, index) => [
+      { text: `✅ Приготовили №${index + 1}`, callback_data: `m:${dishId}` },
+      { text: `🗑 Удалить №${index + 1}`, callback_data: `d:${dishId}` }
+    ]),
+    navigation
+  ];
 }
 
 class AIClientStub implements AIRecommendationClient {
