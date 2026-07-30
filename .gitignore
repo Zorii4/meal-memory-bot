@@ -14,8 +14,6 @@ worker-configuration.d.ts
 *.local.*
 
 # Private project materials
-SPEC.md
-AGENTS.md
 IMPLEMENTATION_PLAN.md
 .agents/
 backups/
