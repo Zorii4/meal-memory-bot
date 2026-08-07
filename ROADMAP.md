@@ -275,7 +275,7 @@ Cloudflare Worker. Поэтому production-бот продолжает раб�
 После появления подходящего endpoint:
 
 - [ ] Проверить `GET /v1/models` и `POST /chat/completions` из Cloudflare Worker.
-- [ ] Обновить `AI_BASE_URL` через Cloudflare variables и локальную
+- [ ] Обновить `AI_BASE_URL` через Cloudflare secret и локальную
   конфигурацию, не меняя доменную логику.
 - [ ] Проверить реальную AI-рекомендацию с объяснением и новинкой.
 - [ ] Проверить fallback с намеренно неверным endpoint, затем вернуть рабочую

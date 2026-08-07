@@ -10,7 +10,7 @@ const webhookEnvironment = {
 	TELEGRAM_ALLOWED_USER_IDS: "123",
 	AI_API_KEY: "ai-key",
 	AI_BASE_URL: "https://provider.example/v1",
-	AI_MODEL: "deepseek-model"
+	AI_MODEL: "example-model"
 };
 
 describe("worker", () => {

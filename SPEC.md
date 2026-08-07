@@ -48,7 +48,7 @@
 | База данных | Cloudflare D1 (SQLite) |
 | Язык разработки | TypeScript в strict-режиме |
 | Telegram SDK | grammY |
-| ИИ | DeepSeek через OpenAI-compatible API российского провайдера |
+| ИИ | Модель через OpenAI-compatible API выбранного провайдера |
 | Вызов ИИ | Нативный `fetch`, без привязки к SDK конкретного провайдера |
 | Проверка ИИ-ответа | Zod + прикладная валидация допустимых ID и дублей |
 | Тесты | Vitest + Cloudflare Workers test pool |
@@ -65,7 +65,7 @@
 flowchart TD
     TG["Telegram"] -->|"HTTPS webhook"| W["Cloudflare Worker"]
     W --> D1["Cloudflare D1"]
-    W -->|"OpenAI-compatible API"| AI["DeepSeek у провайдера"]
+    W -->|"OpenAI-compatible API"| AI["AI-провайдер"]
     W -->|"Bot API"| TG
 ```
 
@@ -415,11 +415,11 @@ wrangler.jsonc
 - `TELEGRAM_WEBHOOK_SECRET`
 - `TELEGRAM_ALLOWED_USER_IDS` — строка с двумя ID через запятую
 - `AI_API_KEY`
+- `AI_BASE_URL` — URL OpenAI-compatible API выбранного провайдера
+- `AI_MODEL` — идентификатор выбранной модели
 
 ### Обычные variables
 
-- `AI_BASE_URL` — URL OpenAI-compatible API без жёсткой привязки к домену
-- `AI_MODEL` — идентификатор DeepSeek у провайдера
 - `AI_TIMEOUT_MS` — default `20000`, maximum `25000`
 - `APP_ENV` — `development` или `production`
 

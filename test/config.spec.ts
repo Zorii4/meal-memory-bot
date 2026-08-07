@@ -7,7 +7,7 @@ const validEnvironment = {
   TELEGRAM_ALLOWED_USER_IDS: "123, 9007199254740993",
   AI_API_KEY: "ai-key",
   AI_BASE_URL: "https://provider.example/v1",
-  AI_MODEL: "deepseek-model"
+  AI_MODEL: "example-model"
 };
 
 describe("parseAllowedUserIds", () => {
