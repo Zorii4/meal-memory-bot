@@ -48,6 +48,9 @@ export const messages = {
     `🍽 Сегодня: ${name}\n\n${selectionReason}`,
   aiNewIdea: (name: string, whyItFits: string): string =>
     `✨ Похожая новинка: ${name}\n${whyItFits}`,
+  similarRecommendation: (name: string, whyItFits: string): string =>
+    `✨ Похожее блюдо: ${name}\n\n${whyItFits}`,
+  similarRecommendationUnavailable: "Не удалось подобрать похожее блюдо. Попробуйте ещё раз позже.",
   userUnavailable: "Не удалось определить отправителя.",
   welcome: "Привет! Добавьте знакомое блюдо или попросите совет на сегодня.",
   yourTelegramId: (userId: string): string => `Ваш Telegram ID: ${userId}`

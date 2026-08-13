@@ -27,6 +27,13 @@ describe("parseAIRecommendationResponse", () => {
     });
   });
 
+  it("accepts a valid JSON object wrapped in provider-added text", () => {
+    expect(parseAIRecommendationResponse(`Вот JSON:\n\n\`\`\`json\n${validResponse}\n\`\`\``)).toMatchObject({
+      selectedDishId: "dish-1",
+      newIdea: { name: "Суп с чечевицей" }
+    });
+  });
+
   it("rejects malformed JSON", () => {
     expect(() => parseAIRecommendationResponse("{not-json")).toThrow(AIResponseJsonError);
   });

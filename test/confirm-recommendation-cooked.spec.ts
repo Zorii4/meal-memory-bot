@@ -63,6 +63,7 @@ function recommendation(): RecommendationEvent {
   return {
     id: "recommendation-1",
     primaryDishId: "dish-1",
+    purpose: "daily",
     newIdeaJson: null,
     requestedByUserId: "123",
     createdAt: "2026-07-21T11:00:00.000Z"

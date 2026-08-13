@@ -43,6 +43,7 @@ export async function getFallbackRecommendationForUser(
   const recommendation: RecommendationEvent = {
     id: dependencies.generateId(),
     primaryDishId: dish.id,
+    purpose: "daily",
     newIdeaJson: null,
     requestedByUserId: userId,
     createdAt: dependencies.now.toISOString()

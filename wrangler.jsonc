@@ -6,7 +6,7 @@
     "enabled": true
   },
   "vars": {
-    "AI_TIMEOUT_MS": "20000",
+    "AI_TIMEOUT_MS": "25000",
     "APP_ENV": "production"
   },
   "d1_databases": [

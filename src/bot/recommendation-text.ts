@@ -16,3 +16,9 @@ export function formatRecommendationText(
     ? recommendation
     : `${recommendation}\n\n${messages.aiNewIdea(newIdea.name, newIdea.whyItFits)}`;
 }
+
+export function formatSimilarRecommendationText(
+  newIdea: NonNullable<AIRecommendationResponse["newIdea"]>
+): string {
+  return messages.similarRecommendation(newIdea.name, newIdea.whyItFits);
+}

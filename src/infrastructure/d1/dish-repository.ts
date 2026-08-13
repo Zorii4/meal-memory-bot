@@ -112,6 +112,7 @@ export class D1DishRepository {
         LEFT JOIN cook_events ON cook_events.dish_id = dishes.id
         LEFT JOIN recommendation_events
           ON recommendation_events.primary_dish_id = dishes.id
+          AND recommendation_events.purpose = 'daily'
         WHERE dishes.is_active = 1
         GROUP BY
           dishes.id,

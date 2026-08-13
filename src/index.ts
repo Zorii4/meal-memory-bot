@@ -2,7 +2,10 @@ import { createBot } from "./bot/create-bot";
 import { handleWebhookUpdate } from "./bot/handle-webhook-update";
 import { parseConfig } from "./config";
 import { AIClient } from "./infrastructure/ai/ai-client";
-import { recommendationSystemPrompt } from "./infrastructure/ai/prompts/recommendation.local";
+import {
+  recommendationSystemPrompt,
+  similarRecommendationSystemPrompt
+} from "./infrastructure/ai/prompts/recommendation.local";
 import { D1DishRepository } from "./infrastructure/d1/dish-repository";
 import { D1HistoryRepository } from "./infrastructure/d1/history-repository";
 import { D1StateRepository } from "./infrastructure/d1/state-repository";
@@ -68,6 +71,7 @@ async function processTelegramUpdate(update: unknown, env: WorkerEnv): Promise<v
     states,
     ai,
     systemPrompt: recommendationSystemPrompt,
+    similarSystemPrompt: similarRecommendationSystemPrompt,
     onAIFallback: logAIFallback
   });
 
@@ -90,6 +94,7 @@ function logAIFallback(error: unknown): void {
       event: "ai_recommendation_fallback",
       errorCode: getErrorCode(error),
       errorName: error instanceof Error ? error.name : "UnknownError",
+      validationReason: getStringProperty(error, "validationReason"),
       causeName: error instanceof Error && error.cause instanceof Error ? error.cause.name : null,
       durationMs: getNumericProperty(error, "durationMs"),
       payloadBytes: getNumericProperty(error, "payloadBytes")
@@ -105,6 +110,16 @@ function getNumericProperty(value: unknown, key: string): number | null {
   const property = (value as Record<string, unknown>)[key];
 
   return typeof property === "number" ? property : null;
+}
+
+function getStringProperty(value: unknown, key: string): string | null {
+  if (typeof value !== "object" || value === null || !(key in value)) {
+    return null;
+  }
+
+  const property = (value as Record<string, unknown>)[key];
+
+  return typeof property === "string" ? property : null;
 }
 
 function getErrorCode(error: unknown): string {

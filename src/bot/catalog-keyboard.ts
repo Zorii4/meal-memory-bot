@@ -5,7 +5,8 @@ import {
   createCatalogConfirmDeleteCallbackData,
   createCatalogCookCallbackData,
   createCatalogDeleteCallbackData,
-  createCatalogPageCallbackData
+  createCatalogPageCallbackData,
+  createCatalogSimilarRecommendationCallbackData
 } from "./catalog-callback-data";
 import { messages } from "./messages";
 
@@ -17,6 +18,7 @@ export function createCatalogKeyboard(page: DishCatalogPage): InlineKeyboard {
       .text(`✅ Приготовили №${index + 1}`, createCatalogCookCallbackData(dish.id))
       .text(`🗑 Удалить №${index + 1}`, createCatalogDeleteCallbackData(dish.id))
       .row();
+    keyboard.text(`✨ Похожий совет №${index + 1}`, createCatalogSimilarRecommendationCallbackData(dish.id)).row();
   }
 
   if (page.hasPreviousPage) {

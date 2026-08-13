@@ -29,6 +29,7 @@ import {
   handleCatalogDeleteCancelCallback,
   handleCatalogDeleteConfirmationCallback,
   handleCatalogDeleteRequestCallback,
+  handleCatalogSimilarRecommendationCallback,
   handleShowDishCatalog
 } from "./handlers/show-dish-catalog";
 import { parseCatalogCallbackData } from "./catalog-callback-data";
@@ -48,6 +49,7 @@ export interface CreateBotDependencies {
     NewIdeaHistoryRepository;
   ai: AIRecommendationClient;
   systemPrompt: string;
+  similarSystemPrompt: string;
   states: ConversationStateRepository;
   now?: () => Date;
   generateId?: () => string;
@@ -82,6 +84,7 @@ export function createBot(
       history: dependencies.history,
       ai: dependencies.ai,
       systemPrompt: dependencies.systemPrompt,
+      similarSystemPrompt: dependencies.similarSystemPrompt,
       now: (dependencies.now ?? (() => new Date()))(),
       generateId: dependencies.generateId ?? (() => crypto.randomUUID()),
       random: dependencies.random ?? Math.random,
@@ -124,6 +127,21 @@ export function createBot(
         return;
       }
 
+      if (catalogCallback.kind === "similar-recommendation") {
+        await handleCatalogSimilarRecommendationCallback(context, catalogCallback.value.dishId, {
+          dishes: dependencies.dishes,
+          history: dependencies.history,
+          ai: dependencies.ai,
+          systemPrompt: dependencies.systemPrompt,
+          similarSystemPrompt: dependencies.similarSystemPrompt,
+          now: (dependencies.now ?? (() => new Date()))(),
+          generateId: dependencies.generateId ?? (() => crypto.randomUUID()),
+          random: dependencies.random ?? Math.random,
+          onAIFallback: dependencies.onAIFallback
+        });
+        return;
+      }
+
       await handleCatalogDeleteCancelCallback(context);
       return;
     }
@@ -133,6 +151,7 @@ export function createBot(
       history: dependencies.history,
       ai: dependencies.ai,
       systemPrompt: dependencies.systemPrompt,
+      similarSystemPrompt: dependencies.similarSystemPrompt,
       now: (dependencies.now ?? (() => new Date()))(),
       generateId: dependencies.generateId ?? (() => crypto.randomUUID()),
       random: dependencies.random ?? Math.random,

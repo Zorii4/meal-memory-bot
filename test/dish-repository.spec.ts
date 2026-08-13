@@ -119,6 +119,7 @@ describe("D1DishRepository", () => {
     await historyRepository.createRecommendation({
       id: "recommendation-delete-1",
       primaryDishId: dish.id,
+      purpose: "daily",
       newIdeaJson: null,
       requestedByUserId: "123456",
       createdAt: "2026-07-21T18:00:00.000Z"
@@ -171,6 +172,7 @@ describe("D1DishRepository", () => {
     await historyRepository.createRecommendation({
       id: "recommendation-1",
       primaryDishId: dish.id,
+      purpose: "daily",
       newIdeaJson: null,
       requestedByUserId: "123456",
       createdAt: "2026-07-20T12:00:00.000Z"
@@ -178,9 +180,18 @@ describe("D1DishRepository", () => {
     await historyRepository.createRecommendation({
       id: "recommendation-2",
       primaryDishId: dish.id,
+      purpose: "daily",
       newIdeaJson: null,
       requestedByUserId: "123456",
       createdAt: "2026-07-21T12:00:00.000Z"
+    });
+    await historyRepository.createRecommendation({
+      id: "recommendation-similar",
+      primaryDishId: dish.id,
+      purpose: "similar",
+      newIdeaJson: null,
+      requestedByUserId: "123456",
+      createdAt: "2026-07-22T12:00:00.000Z"
     });
 
     const statistics = await dishRepository.listActiveWithStatistics();

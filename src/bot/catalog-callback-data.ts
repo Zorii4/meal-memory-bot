@@ -3,6 +3,7 @@ const CATALOG_COOK_ACTION = "m";
 const CATALOG_DELETE_ACTION = "d";
 const CATALOG_CONFIRM_DELETE_ACTION = "x";
 const CATALOG_CANCEL_DELETE_ACTION = "k";
+const CATALOG_SIMILAR_RECOMMENDATION_ACTION = "r";
 
 export interface CatalogPageCallbackData {
   page: number;
@@ -21,7 +22,12 @@ export type CatalogCallbackData =
   | { kind: "cook"; value: CatalogCookCallbackData }
   | { kind: "request-delete"; value: CatalogDeleteCallbackData }
   | { kind: "confirm-delete"; value: CatalogDeleteCallbackData }
-  | { kind: "cancel-delete"; value: CatalogDeleteCallbackData };
+  | { kind: "cancel-delete"; value: CatalogDeleteCallbackData }
+  | { kind: "similar-recommendation"; value: CatalogDishCallbackData };
+
+export interface CatalogDishCallbackData {
+  dishId: string;
+}
 
 export function createCatalogPageCallbackData(page: number): string {
   return `${CATALOG_PAGE_ACTION}:${page}`;
@@ -41,6 +47,10 @@ export function createCatalogConfirmDeleteCallbackData(dishId: string): string {
 
 export function createCatalogCancelDeleteCallbackData(dishId: string): string {
   return `${CATALOG_CANCEL_DELETE_ACTION}:${dishId}`;
+}
+
+export function createCatalogSimilarRecommendationCallbackData(dishId: string): string {
+  return `${CATALOG_SIMILAR_RECOMMENDATION_ACTION}:${dishId}`;
 }
 
 export function parseCatalogCallbackData(value: string | undefined): CatalogCallbackData | null {
@@ -69,6 +79,10 @@ export function parseCatalogCallbackData(value: string | undefined): CatalogCall
 
     if (action === CATALOG_CANCEL_DELETE_ACTION) {
       return { kind: "cancel-delete", value: { dishId: identifier } };
+    }
+
+    if (action === CATALOG_SIMILAR_RECOMMENDATION_ACTION) {
+      return { kind: "similar-recommendation", value: { dishId: identifier } };
     }
   }
 

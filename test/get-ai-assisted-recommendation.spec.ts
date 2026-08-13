@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getAIAssistedRecommendationForUser,
+  getAIAssistedRecommendationForDish,
   type AIAssistedRecommendationDishRepository,
   type AIAssistedRecommendationHistoryRepository,
   type AIRecommendationClient
@@ -195,6 +196,51 @@ describe("getAIAssistedRecommendationForUser", () => {
   });
 });
 
+describe("getAIAssistedRecommendationForDish", () => {
+  it("limits the AI to the selected catalog dish and records one recommendation", async () => {
+    const dishes = new DishRepositoryStub([dish("dish-1"), dish("dish-2")]);
+    const history = new HistoryRepositoryStub();
+    const ai = new AIClientStub(JSON.stringify({
+      selectedDishId: "dish-2",
+      selectionReason: "Подходит.",
+      newIdea: {
+        name: "Похожая новинка",
+        similarToDishIds: ["dish-2"],
+        whyItFits: "Похожий простой вариант.",
+        ingredients: ["овощи"],
+        prepMinutes: 20,
+        nutritionFocus: []
+      },
+      warnings: []
+    }));
+
+    const result = await getAIAssistedRecommendationForDish("dish-2", "123", dependencies(dishes, history, ai));
+
+    expect(result).toMatchObject({
+      kind: "recommended",
+      recommendation: { primaryDishId: "dish-2", purpose: "similar" },
+      newIdea: { name: "Похожая новинка" }
+    });
+    expect(ai.requests).toHaveLength(1);
+    expect(ai.requests[0]).toMatchObject({
+      systemPrompt: "similar-only instruction",
+      maxTokens: 2_000
+    });
+    expect(ai.requests[0]).toMatchObject({ input: { candidates: [{ id: "dish-2" }] } });
+    expect(history.recommendations).toHaveLength(1);
+  });
+
+  it("does not use the selected dish as fallback when AI fails", async () => {
+    const result = await getAIAssistedRecommendationForDish(
+      "dish-2",
+      "123",
+      dependencies(new DishRepositoryStub([dish("dish-1"), dish("dish-2")]), new HistoryRepositoryStub(), new AIClientStub("{"))
+    );
+
+    expect(result).toEqual({ kind: "new-idea-unavailable" });
+  });
+});
+
 function dependencies(
   dishes: DishRepositoryStub,
   history: HistoryRepositoryStub,
@@ -205,6 +251,7 @@ function dependencies(
     history,
     ai,
     systemPrompt: "private prompt",
+    similarSystemPrompt: "similar-only instruction",
     now,
     generateId: () => "recommendation-1",
     random: () => 0
@@ -262,11 +309,11 @@ class HistoryRepositoryStub implements AIAssistedRecommendationHistoryRepository
 }
 
 class AIClientStub implements AIRecommendationClient {
-  public readonly requests: Array<{ systemPrompt: string; input: unknown }> = [];
+  public readonly requests: Array<{ systemPrompt: string; input: unknown; maxTokens?: number }> = [];
 
   public constructor(private readonly response: string | Error) {}
 
-  public async complete(request: { systemPrompt: string; input: unknown }): Promise<string> {
+  public async complete(request: { systemPrompt: string; input: unknown; maxTokens?: number }): Promise<string> {
     this.requests.push(request);
 
     if (this.response instanceof Error) {

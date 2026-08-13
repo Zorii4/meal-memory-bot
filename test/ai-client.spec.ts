@@ -27,11 +27,39 @@ describe("AIClient", () => {
     expect(requests[0]?.headers.get("Authorization")).toBe("Bearer test-api-key");
     expect(await requests[0]?.json()).toEqual({
       model: "test-model",
+      max_tokens: 800,
       messages: [
         { role: "system", content: "system prompt" },
         { role: "user", content: JSON.stringify({ candidates: [{ id: "dish-1" }] }) }
       ]
     });
+  });
+
+  it("does not bind an injected fetch function to the AI client", async () => {
+    const fetchFn: typeof fetch = function (this: unknown): Promise<Response> {
+      if (this !== undefined) {
+        return Promise.reject(new TypeError("Illegal invocation"));
+      }
+
+      return Promise.resolve(
+        Response.json({ choices: [{ message: { content: "OK" } }] })
+      );
+    };
+    const client = new AIClient(config, fetchFn);
+
+    await expect(client.complete({ systemPrompt: "system", input: { ping: true } })).resolves.toBe("OK");
+  });
+
+  it("uses a request-specific completion token limit", async () => {
+    let requestBody: unknown;
+    const client = new AIClient(config, async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body)) as unknown;
+      return Response.json({ choices: [{ message: { content: "OK" } }] });
+    });
+
+    await client.complete({ systemPrompt: "system", input: {}, maxTokens: 2_000 });
+
+    expect(requestBody).toMatchObject({ max_tokens: 2_000 });
   });
 
   it("returns a stable error for an HTTP failure", async () => {

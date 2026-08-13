@@ -36,13 +36,14 @@ describe("0002_delete_dish_related_history migration", () => {
       cookedAt: "2026-07-27T12:00:00.000Z",
       telegramCallbackQueryId: "migration-callback-1"
     });
-    await history.createRecommendation({
-      id: "migration-recommendation-1",
-      primaryDishId: "migration-dish-1",
-      newIdeaJson: null,
-      requestedByUserId: "123",
-      createdAt: "2026-07-27T12:00:00.000Z"
-    });
+    await env.DB
+      .prepare(
+        `INSERT INTO recommendation_events (
+          id, primary_dish_id, new_idea_json, requested_by_user_id, created_at
+        ) VALUES (?, ?, ?, ?, ?)`
+      )
+      .bind("migration-recommendation-1", "migration-dish-1", null, "123", "2026-07-27T12:00:00.000Z")
+      .run();
 
     await env.DB
       .prepare(deleteDishRelatedHistory.replace(/^PRAGMA foreign_keys = ON;\s*/m, ""))

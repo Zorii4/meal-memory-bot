@@ -87,6 +87,7 @@ function recommendationWithIdea(): RecommendationEvent {
   return {
     id: "recommendation-1",
     primaryDishId: "dish-primary",
+    purpose: "daily",
     newIdeaJson: JSON.stringify({
       name: "Lentil soup",
       similarToDishIds: ["dish-primary"],

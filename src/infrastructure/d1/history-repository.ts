@@ -3,6 +3,7 @@ import type { CookEvent, RecentCookedDish, RecommendationEvent } from "../../dom
 interface RecommendationEventRow {
   id: string;
   primary_dish_id: string;
+  purpose: "daily" | "similar";
   new_idea_json: string | null;
   requested_by_user_id: string;
   created_at: string;
@@ -54,14 +55,16 @@ export class D1HistoryRepository {
         `INSERT INTO recommendation_events (
           id,
           primary_dish_id,
+          purpose,
           new_idea_json,
           requested_by_user_id,
           created_at
-        ) VALUES (?, ?, ?, ?, ?)`
+        ) VALUES (?, ?, ?, ?, ?, ?)`
       )
       .bind(
         event.id,
         event.primaryDishId,
+        event.purpose,
         newIdeaJson,
         event.requestedByUserId,
         event.createdAt
@@ -74,7 +77,7 @@ export class D1HistoryRepository {
   public async findRecommendationById(id: string): Promise<RecommendationEvent | null> {
     const row = await this.db
       .prepare(
-        `SELECT id, primary_dish_id, new_idea_json, requested_by_user_id, created_at
+        `SELECT id, primary_dish_id, purpose, new_idea_json, requested_by_user_id, created_at
         FROM recommendation_events
         WHERE id = ?`
       )
@@ -104,6 +107,7 @@ function toRecommendationEvent(row: RecommendationEventRow): RecommendationEvent
   return {
     id: row.id,
     primaryDishId: row.primary_dish_id,
+    purpose: row.purpose,
     newIdeaJson: normalizeJson(row.new_idea_json),
     requestedByUserId: row.requested_by_user_id,
     createdAt: row.created_at

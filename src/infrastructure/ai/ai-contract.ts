@@ -66,8 +66,65 @@ function parseJson(value: string): unknown {
   try {
     return JSON.parse(value) as unknown;
   } catch (cause: unknown) {
-    throw new AIResponseJsonError(cause);
+    const embeddedJson = extractEmbeddedJsonObject(value);
+
+    if (embeddedJson === null) {
+      throw new AIResponseJsonError(cause);
+    }
+
+    try {
+      return JSON.parse(embeddedJson) as unknown;
+    } catch {
+      throw new AIResponseJsonError(cause);
+    }
   }
+}
+
+function extractEmbeddedJsonObject(value: string): string | null {
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (character === "{") {
+      if (depth === 0) {
+        start = index;
+      }
+
+      depth += 1;
+      continue;
+    }
+
+    if (character === "}" && depth > 0) {
+      depth -= 1;
+
+      if (depth === 0 && start !== -1) {
+        return value.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
 }
 
 function hasOnlyUniqueValues(values: readonly string[]): boolean {

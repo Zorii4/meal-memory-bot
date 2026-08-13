@@ -81,6 +81,7 @@ describe("D1HistoryRepository", () => {
     const event: RecommendationEvent = {
       id: "recommendation-1",
       primaryDishId: dish.id,
+      purpose: "daily",
       newIdeaJson: '{"name":"Шакшука"}',
       requestedByUserId: "123456",
       createdAt: "2026-07-21T18:00:00.000Z"
@@ -99,6 +100,7 @@ describe("D1HistoryRepository", () => {
       repository.createRecommendation({
         id: "recommendation-invalid-json",
         primaryDishId: dish.id,
+        purpose: "daily",
         newIdeaJson: "not json",
         requestedByUserId: "123456",
         createdAt: "2026-07-21T18:00:00.000Z"

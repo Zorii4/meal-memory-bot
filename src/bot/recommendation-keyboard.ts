@@ -32,3 +32,15 @@ export function createRecommendationKeyboard(
 
   return keyboard;
 }
+
+export function createSimilarRecommendationKeyboard(recommendationId: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(
+      messages.confirmNewIdeaCookButton,
+      createRecommendationCallbackData(callbackActions.confirmNewIdeaCook, recommendationId)
+    )
+    .text(
+      messages.saveNewIdeaButton,
+      createRecommendationCallbackData(callbackActions.saveNewIdea, recommendationId)
+    );
+}

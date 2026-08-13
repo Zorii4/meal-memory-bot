@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createCatalogCookCallbackData,
   createCatalogPageCallbackData,
+  createCatalogSimilarRecommendationCallbackData,
   parseCatalogCallbackData
 } from "../src/bot/catalog-callback-data";
 
@@ -23,6 +24,13 @@ describe("catalog callback data", () => {
   it("parses the explicit deletion confirmation callback", () => {
     expect(parseCatalogCallbackData("x:dish-1")).toEqual({
       kind: "confirm-delete",
+      value: { dishId: "dish-1" }
+    });
+  });
+
+  it("round-trips a catalog similar recommendation callback", () => {
+    expect(parseCatalogCallbackData(createCatalogSimilarRecommendationCallbackData("dish-1"))).toEqual({
+      kind: "similar-recommendation",
       value: { dishId: "dish-1" }
     });
   });

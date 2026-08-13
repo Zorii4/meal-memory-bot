@@ -17,6 +17,12 @@ import {
 import { createCatalogDeletionKeyboard, createCatalogKeyboard } from "../catalog-keyboard";
 import { formatCatalogText } from "../catalog-text";
 import { messages } from "../messages";
+import {
+  getAIAssistedRecommendationForDish,
+  type GetAIAssistedRecommendationDependencies
+} from "../../application/get-ai-assisted-recommendation";
+import { createSimilarRecommendationKeyboard } from "../recommendation-keyboard";
+import { formatSimilarRecommendationText } from "../recommendation-text";
 
 export async function handleShowDishCatalog(
   context: Pick<Context, "reply">,
@@ -90,6 +96,56 @@ export async function handleCatalogDeleteCancelCallback(
   context: Pick<Context, "answerCallbackQuery">
 ): Promise<void> {
   await context.answerCallbackQuery({ text: messages.catalogDeleteCancelled });
+}
+
+export async function handleCatalogSimilarRecommendationCallback(
+  context: Pick<Context, "callbackQuery" | "answerCallbackQuery" | "reply">,
+  dishId: string,
+  dependencies: GetAIAssistedRecommendationDependencies
+): Promise<void> {
+  const callbackQuery = context.callbackQuery;
+
+  if (callbackQuery === undefined) {
+    await context.answerCallbackQuery({ text: messages.catalogDishUnavailable });
+    return;
+  }
+
+  const result = await getAIAssistedRecommendationForDish(
+    dishId,
+    String(callbackQuery.from.id),
+    dependencies
+  );
+
+  if (result.kind === "dish-not-found") {
+    await context.answerCallbackQuery({ text: messages.catalogDishUnavailable });
+    return;
+  }
+
+  if (result.kind === "new-idea-unavailable") {
+    await context.reply(messages.similarRecommendationUnavailable);
+    await answerCallbackQuerySafely(context);
+    return;
+  }
+
+  await context.reply(formatSimilarRecommendationText(result.newIdea), {
+    reply_markup: createSimilarRecommendationKeyboard(result.recommendation.id)
+  });
+  await answerCallbackQuerySafely(context);
+}
+
+async function answerCallbackQuerySafely(
+  context: Pick<Context, "answerCallbackQuery">
+): Promise<void> {
+  try {
+    await context.answerCallbackQuery();
+  } catch (error: unknown) {
+    console.error(
+      JSON.stringify({
+        event: "telegram_callback_answer_failed",
+        errorName: error instanceof Error ? error.name : "UnknownError"
+      })
+    );
+  }
 }
 
 async function replyWithCatalogPage(

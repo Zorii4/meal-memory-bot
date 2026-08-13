@@ -1,5 +1,6 @@
 import initialSchema from "../../migrations/0001_initial_schema.sql?raw";
 import deleteDishRelatedHistory from "../../migrations/0002_delete_dish_related_history.sql?raw";
+import recommendationPurpose from "../../migrations/0003_add_recommendation_purpose.sql?raw";
 
 export async function applyInitialSchema(db: D1Database): Promise<void> {
   const statements = initialSchema
@@ -13,7 +14,8 @@ export async function applyInitialSchema(db: D1Database): Promise<void> {
 
   await db.batch([
     ...statements.map((statement) => db.prepare(statement)),
-    db.prepare(deleteDishTrigger)
+    db.prepare(deleteDishTrigger),
+    db.prepare(recommendationPurpose.trim())
   ]);
 }
 

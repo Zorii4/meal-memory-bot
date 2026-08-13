@@ -155,6 +155,53 @@ describe("dish catalog button", () => {
     ]);
   });
 
+  it("creates a similar recommendation for the selected catalog dish", async () => {
+    const telegram = new TelegramApiStub();
+    const history = new HistoryRepositoryStub();
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      () => new Date("2026-07-27T12:00:00.000Z"),
+      new DishRepositoryStub([dishStatistics({ id: "dish-1", name: "Омлет" })]),
+      () => "recommendation-1",
+      history,
+      new AIClientStub(
+        JSON.stringify({
+          selectedDishId: "dish-1",
+          selectionReason: "Не показывается.",
+          newIdea: {
+            name: "Суп с чечевицей",
+            similarToDishIds: ["dish-1"],
+            whyItFits: "Похожий простой вариант.",
+            ingredients: ["чечевица", "лук"],
+            prepMinutes: 30,
+            nutritionFocus: ["protein"]
+          },
+          warnings: []
+        })
+      )
+    );
+
+    await bot.handleUpdate(createCallbackUpdate(123, "r:dish-1"));
+
+    expect(history.recommendations).toMatchObject([{ primaryDishId: "dish-1", purpose: "similar" }]);
+    expect(telegram.sentMessages).toEqual([
+      {
+        chat_id: 123,
+        text: "✨ Похожее блюдо: Суп с чечевицей\n\nПохожий простой вариант.",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "✅ Приготовили новинку", callback_data: "n:recommendation-1" },
+              { text: "💾 Сохранить новинку", callback_data: "s:recommendation-1" }
+            ]
+          ]
+        }
+      },
+      { callback_query_id: "callback-1" }
+    ]);
+  });
+
   it("does not duplicate cooking when Telegram repeats the callback", async () => {
     const telegram = new TelegramApiStub();
     const history = new HistoryRepositoryStub();
@@ -284,6 +331,7 @@ describe("recommend dish button", () => {
       {
         id: "recommendation-1",
         primaryDishId: "dish-1",
+        purpose: "daily",
         newIdeaJson: null,
         requestedByUserId: "123",
         createdAt: "2026-07-21T12:00:00.000Z"
@@ -414,6 +462,7 @@ function createTestBot(
       history,
       ai,
       systemPrompt: "private prompt",
+      similarSystemPrompt: "similar-only instruction",
       states,
       now,
       generateId,
@@ -586,9 +635,12 @@ function catalogKeyboard(
   navigation: Array<{ text: string; callback_data: string }>
 ): Array<Array<{ text: string; callback_data: string }>> {
   return [
-    ...dishIds.map((dishId, index) => [
-      { text: `✅ Приготовили №${index + 1}`, callback_data: `m:${dishId}` },
-      { text: `🗑 Удалить №${index + 1}`, callback_data: `d:${dishId}` }
+    ...dishIds.flatMap((dishId, index) => [
+      [
+        { text: `✅ Приготовили №${index + 1}`, callback_data: `m:${dishId}` },
+        { text: `🗑 Удалить №${index + 1}`, callback_data: `d:${dishId}` }
+      ],
+      [{ text: `✨ Похожий совет №${index + 1}`, callback_data: `r:${dishId}` }]
     ]),
     navigation
   ];
