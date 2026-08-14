@@ -19,6 +19,9 @@ interface WorkerEnv {
   AI_BASE_URL: string;
   AI_MODEL: string;
   AI_TIMEOUT_MS?: string;
+  AI_RESPONSE_FORMAT?: "json_schema" | "json_object";
+  AI_TEMPERATURE?: string;
+  AI_REASONING_EFFORT?: "low";
   APP_ENV?: "development" | "production";
 }
 

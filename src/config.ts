@@ -2,6 +2,8 @@ import { z } from "zod";
 
 const DEFAULT_AI_TIMEOUT_MS = 20_000;
 const MAX_AI_TIMEOUT_MS = 25_000;
+const DEFAULT_AI_RESPONSE_FORMAT = "json_object";
+const DEFAULT_AI_TEMPERATURE = 0.2;
 
 const requiredString = z.string().trim().min(1);
 
@@ -19,6 +21,17 @@ const configSchema = z.object({
     .optional()
     .transform((value) => (value === undefined ? DEFAULT_AI_TIMEOUT_MS : Number(value)))
     .pipe(z.number().finite().int().min(1).max(MAX_AI_TIMEOUT_MS)),
+  AI_RESPONSE_FORMAT: z
+    .enum(["json_schema", "json_object"])
+    .default(DEFAULT_AI_RESPONSE_FORMAT),
+  AI_TEMPERATURE: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .transform((value) => (value === undefined ? DEFAULT_AI_TEMPERATURE : Number(value)))
+    .pipe(z.number().finite().min(0).max(2)),
+  AI_REASONING_EFFORT: z.enum(["low"]).optional(),
   APP_ENV: z.enum(["development", "production"]).default("development")
 });
 
@@ -33,6 +46,9 @@ export interface AppConfig {
     baseUrl: string;
     model: string;
     timeoutMs: number;
+    responseFormat: "json_schema" | "json_object";
+    temperature: number;
+    reasoningEffort: "low" | undefined;
   };
   appEnv: "development" | "production";
 }
@@ -73,7 +89,10 @@ export function parseConfig(value: unknown): AppConfig {
       apiKey: result.data.AI_API_KEY,
       baseUrl: result.data.AI_BASE_URL,
       model: result.data.AI_MODEL,
-      timeoutMs: result.data.AI_TIMEOUT_MS
+      timeoutMs: result.data.AI_TIMEOUT_MS,
+      responseFormat: result.data.AI_RESPONSE_FORMAT,
+      temperature: result.data.AI_TEMPERATURE,
+      reasoningEffort: result.data.AI_REASONING_EFFORT
     },
     appEnv: result.data.APP_ENV
   };

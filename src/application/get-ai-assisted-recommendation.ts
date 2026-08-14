@@ -13,6 +13,8 @@ import {
   buildAIRecommendationInput
 } from "../infrastructure/ai/recommendation-input";
 
+const RECOMMENDATION_MAX_TOKENS = 2_000;
+
 export interface AIAssistedRecommendationDishRepository {
   listActiveWithStatistics(): Promise<DishStatistics[]>;
   listActiveNames(limit: number): Promise<string[]>;
@@ -151,7 +153,7 @@ async function getAIResult(
     const responseText = await dependencies.ai.complete({
       systemPrompt,
       input: buildAIRecommendationInput({ candidates, recentCooked, catalogNames }),
-      maxTokens: includeRecentCooked ? undefined : 2_000
+      maxTokens: RECOMMENDATION_MAX_TOKENS
     });
     const response = parseAIRecommendationResponse(responseText);
     const dish = candidates.find((candidate) => candidate.id === response.selectedDishId);

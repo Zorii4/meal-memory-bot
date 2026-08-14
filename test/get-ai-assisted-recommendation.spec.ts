@@ -41,6 +41,7 @@ describe("getAIAssistedRecommendationForUser", () => {
       recommendation: { id: "recommendation-1", primaryDishId: "dish-2" }
     });
     expect(ai.requests).toHaveLength(1);
+    expect(ai.requests[0]).toMatchObject({ maxTokens: 2_000 });
     expect(history.recommendations[0]?.newIdeaJson).toContain("Суп с чечевицей");
   });
 

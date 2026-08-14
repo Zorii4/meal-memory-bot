@@ -29,9 +29,18 @@ describe("parseConfig", () => {
         allowedUserIds: new Set(["123", "9007199254740993"])
       },
       ai: {
-        timeoutMs: 20_000
+        timeoutMs: 20_000,
+        responseFormat: "json_object",
+        temperature: 0.2,
+        reasoningEffort: undefined
       },
       appEnv: "development"
+    });
+  });
+
+  it("accepts low reasoning after provider support is confirmed", () => {
+    expect(parseConfig({ ...validEnvironment, AI_REASONING_EFFORT: "low" })).toMatchObject({
+      ai: { reasoningEffort: "low" }
     });
   });
 
@@ -39,6 +48,9 @@ describe("parseConfig", () => {
     [{ ...validEnvironment, TELEGRAM_BOT_TOKEN: "" }],
     [{ ...validEnvironment, AI_BASE_URL: "not a URL" }],
     [{ ...validEnvironment, AI_TIMEOUT_MS: "25001" }],
+    [{ ...validEnvironment, AI_RESPONSE_FORMAT: "text" }],
+    [{ ...validEnvironment, AI_TEMPERATURE: "2.1" }],
+    [{ ...validEnvironment, AI_REASONING_EFFORT: "high" }],
     [{ ...validEnvironment, APP_ENV: "test" }]
   ])("rejects an invalid environment", (environment) => {
     expect(() => parseConfig(environment)).toThrow(ConfigurationError);

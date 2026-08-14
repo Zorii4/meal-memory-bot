@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { aiRecommendationJsonSchema } from "./ai-contract";
 
 const chatCompletionResponseSchema = z.object({
   choices: z
@@ -19,6 +20,9 @@ export interface AIClientConfig {
   apiKey: string;
   model: string;
   timeoutMs: number;
+  responseFormat: "json_schema" | "json_object";
+  temperature: number;
+  reasoningEffort: "low" | undefined;
 }
 
 export interface AICompletionRequest {
@@ -47,6 +51,11 @@ export class AIClient {
     const body = JSON.stringify({
       model: this.config.model,
       max_tokens: request.maxTokens ?? MAX_COMPLETION_TOKENS,
+      temperature: this.config.temperature,
+      response_format: createResponseFormat(this.config.responseFormat),
+      ...(this.config.reasoningEffort === undefined
+        ? {}
+        : { reasoning: { effort: this.config.reasoningEffort } }),
       messages: [
         { role: "system", content: request.systemPrompt },
         { role: "user", content: JSON.stringify(request.input) }
@@ -91,6 +100,21 @@ export class AIClient {
       clearTimeout(timeoutId);
     }
   }
+}
+
+function createResponseFormat(format: AIClientConfig["responseFormat"]): object {
+  if (format === "json_object") {
+    return { type: "json_object" };
+  }
+
+  return {
+    type: "json_schema",
+    json_schema: {
+      name: "meal_memory_recommendation",
+      strict: true,
+      schema: aiRecommendationJsonSchema
+    }
+  };
 }
 
 function getChatCompletionsUrl(baseUrl: string): string {

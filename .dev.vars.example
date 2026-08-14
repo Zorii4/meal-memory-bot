@@ -1,11 +1,16 @@
 # Copy this file to .dev.vars and replace every placeholder with local values.
-# Add AI_BASE_URL and AI_MODEL directly to .dev.vars; they are intentionally absent here.
 # Never commit .dev.vars.
 
 TELEGRAM_BOT_TOKEN=1234567890:replace-with-your-telegram-bot-token
 TELEGRAM_WEBHOOK_SECRET=replace-with-a-long-random-webhook-secret
 TELEGRAM_ALLOWED_USER_IDS=123456789,987654321
+
 AI_API_KEY=replace-with-your-ai-provider-api-key
+AI_BASE_URL=replace-with-your-ai-provider-api-url
+AI_MODEL=replace-with-your-ai-provider-api-model
 
 AI_TIMEOUT_MS=25000
+AI_RESPONSE_FORMAT=json_object
+AI_TEMPERATURE=0.2
+
 APP_ENV=development

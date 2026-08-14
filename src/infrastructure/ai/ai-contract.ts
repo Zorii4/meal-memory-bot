@@ -39,6 +39,80 @@ export const aiRecommendationResponseSchema = z
 export type AIRecommendationResponse = z.infer<typeof aiRecommendationResponseSchema>;
 export type AINewIdea = z.infer<typeof aiNewIdeaSchema>;
 
+export const aiRecommendationJsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["selectedDishId", "selectionReason", "newIdea", "warnings"],
+  properties: {
+    selectedDishId: { type: "string", minLength: 1 },
+    selectionReason: { type: "string", minLength: 1, maxLength: 280 },
+    newIdea: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          additionalProperties: false,
+          required: [
+            "name",
+            "similarToDishIds",
+            "whyItFits",
+            "ingredients",
+            "prepMinutes",
+            "nutritionFocus"
+          ],
+          properties: {
+            name: { type: "string", minLength: 2, maxLength: 100 },
+            similarToDishIds: {
+              type: "array",
+              minItems: 1,
+              maxItems: 5,
+              uniqueItems: true,
+              items: { type: "string", minLength: 1 }
+            },
+            whyItFits: { type: "string", minLength: 1, maxLength: 280 },
+            ingredients: {
+              type: "array",
+              maxItems: 8,
+              items: { type: "string", minLength: 1 }
+            },
+            prepMinutes: {
+              anyOf: [
+                { type: "null" },
+                { type: "integer", minimum: 5, maximum: 180 }
+              ]
+            },
+            nutritionFocus: {
+              type: "array",
+              uniqueItems: true,
+              items: {
+                type: "string",
+                enum: [
+                  "protein",
+                  "fiber",
+                  "vegetables",
+                  "complex_carbs",
+                  "legumes",
+                  "fish",
+                  "omega3",
+                  "iron",
+                  "calcium",
+                  "fermented",
+                  "lighter_meal"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    warnings: {
+      type: "array",
+      maxItems: 3,
+      items: { type: "string", minLength: 1 }
+    }
+  }
+} as const;
+
 export function parseAIRecommendationResponse(value: string): AIRecommendationResponse {
   const parsed = parseJson(value);
 

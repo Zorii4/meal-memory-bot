@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
+import { aiRecommendationJsonSchema } from "../src/infrastructure/ai/ai-contract";
 import { AIClient, AIHttpError, AITimeoutError } from "../src/infrastructure/ai/ai-client";
 
 const config = {
   baseUrl: "https://ai.example.test/v1",
   apiKey: "test-api-key",
   model: "test-model",
-  timeoutMs: 20
+  timeoutMs: 20,
+  responseFormat: "json_schema" as const,
+  temperature: 0.2,
+  reasoningEffort: undefined
 };
 
 describe("AIClient", () => {
@@ -28,10 +32,37 @@ describe("AIClient", () => {
     expect(await requests[0]?.json()).toEqual({
       model: "test-model",
       max_tokens: 800,
+      temperature: 0.2,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "meal_memory_recommendation",
+          strict: true,
+          schema: aiRecommendationJsonSchema
+        }
+      },
       messages: [
         { role: "system", content: "system prompt" },
         { role: "user", content: JSON.stringify({ candidates: [{ id: "dish-1" }] }) }
       ]
+    });
+  });
+
+  it("uses JSON mode and low reasoning only when explicitly configured", async () => {
+    let requestBody: unknown;
+    const client = new AIClient(
+      { ...config, responseFormat: "json_object", reasoningEffort: "low" },
+      async (_input, init) => {
+        requestBody = JSON.parse(String(init?.body)) as unknown;
+        return Response.json({ choices: [{ message: { content: "OK" } }] });
+      }
+    );
+
+    await client.complete({ systemPrompt: "system", input: {} });
+
+    expect(requestBody).toMatchObject({
+      response_format: { type: "json_object" },
+      reasoning: { effort: "low" }
     });
   });
 

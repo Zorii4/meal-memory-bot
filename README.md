@@ -26,6 +26,12 @@ AI_BASE_URL=https://api.example.com/v1
 AI_MODEL=provider/model-name
 ```
 
+Параметры структурированного ответа уже заданы в шаблоне: `AI_TIMEOUT_MS=25000`,
+`AI_RESPONSE_FORMAT=json_object` и `AI_TEMPERATURE=0.2`. Для production проверена
+модель `gpt-4o-mini`: два полных обычных запроса и один похожий прошли контракт
+за 3.7–4.9 секунды. Строгая JSON Schema на настроенном endpoint возвращает HTTP
+400, поэтому используется JSON Mode с обязательной Zod- и прикладной валидацией.
+
 ```powershell
 Copy-Item .dev.vars.example .dev.vars
 npm install
@@ -54,6 +60,11 @@ npx wrangler secret put AI_MODEL
 ```
 
 `AI_BASE_URL` и `AI_MODEL` хранятся как secrets намеренно: это скрывает выбранные endpoint и модель из публичного `wrangler.jsonc`. При смене AI-провайдера или модели повторите соответствующую команду `wrangler secret put`, затем разверните Worker. Значения в `vars` не шифруются, поэтому не помещайте туда API-ключи или приватную конфигурацию.
+
+Несекретные параметры генерации задаются в `wrangler.jsonc`: `AI_TIMEOUT_MS=25000`,
+`AI_RESPONSE_FORMAT=json_object` и `AI_TEMPERATURE=0.2`. Zod и прикладная
+валидация остаются обязательными. При смене модели снова проверьте полный
+обычный и похожий сценарии с реальным размером payload.
 
 После создания production D1 укажите её реальный `database_id` в `wrangler.jsonc`, примените миграции и разверните Worker:
 
