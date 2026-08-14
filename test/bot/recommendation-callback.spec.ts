@@ -65,12 +65,12 @@ describe("recommendation callback", () => {
     expect(context.answers).toEqual([{ text: "Вот другой вариант." }]);
     expect(context.replies).toEqual([
       {
-        text: "🍽 Сегодня: Омлет",
+        text: "🍽 Сегодня предлагаю приготовить: Омлет",
         other: {
           reply_markup: {
             inline_keyboard: [
               [{ text: "✅ Приготовили основное", callback_data: "c:recommendation-2" }],
-              [{ text: "🔄 Другой совет", callback_data: "a:recommendation-2" }]
+              [{ text: "🔄 Хочу другой совет", callback_data: "a:recommendation-2" }]
             ]
           }
         }

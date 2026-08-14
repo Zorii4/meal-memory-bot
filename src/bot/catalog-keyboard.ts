@@ -18,7 +18,7 @@ export function createCatalogKeyboard(page: DishCatalogPage): InlineKeyboard {
       .text(`✅ Приготовили №${index + 1}`, createCatalogCookCallbackData(dish.id))
       .text(`🗑 Удалить №${index + 1}`, createCatalogDeleteCallbackData(dish.id))
       .row();
-    keyboard.text(`✨ Похожий совет №${index + 1}`, createCatalogSimilarRecommendationCallbackData(dish.id)).row();
+    keyboard.text(`✨ Похожее на №${index + 1} от ИИ`, createCatalogSimilarRecommendationCallbackData(dish.id)).row();
   }
 
   if (page.hasPreviousPage) {

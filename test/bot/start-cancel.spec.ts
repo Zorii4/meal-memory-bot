@@ -1,5 +1,5 @@
 import type { Update } from "grammy/types";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DishRepository } from "../../src/application/add-dish";
 import type {
   AIAssistedRecommendationDishRepository,
@@ -7,13 +7,14 @@ import type {
 } from "../../src/application/get-ai-assisted-recommendation";
 import type { RecommendationDishRepository } from "../../src/application/get-fallback-recommendation";
 import { createBot } from "../../src/bot/create-bot";
+import { userGuideMessage } from "../../src/bot/user-guide";
 import type { ConversationState } from "../../src/domain/conversation-state";
 import type { Dish, NewDish } from "../../src/domain/dish";
 import type { DishStatistics } from "../../src/domain/dish";
 import type { CookEvent, RecentCookedDish, RecommendationEvent } from "../../src/domain/history";
 
 describe("/start", () => {
-  it("shows the persistent main keyboard to an allowed user", async () => {
+  it("shows the persistent main keyboard and pins the user guide", async () => {
     const telegram = new TelegramApiStub();
     const bot = createTestBot(telegram, new StateRepositoryStub());
 
@@ -22,17 +23,36 @@ describe("/start", () => {
     expect(telegram.sentMessages).toEqual([
       {
         chat_id: 123,
-        text: "Привет! Добавьте знакомое блюдо или попросите совет на сегодня.",
+        text: userGuideMessage,
         reply_markup: {
           keyboard: [
-            [{ text: "➕ Добавить блюдо" }],
-            [{ text: "🍽 Посоветовать блюдо" }],
-            [{ text: "📚 Мои блюда" }]
+            [{ text: "➕ Добавить блюдо в базу" }],
+            [{ text: "🍽 Посоветовать что приготовить" }],
+            [{ text: "📚 Посмотреть все мои блюда" }]
           ],
           resize_keyboard: true,
           is_persistent: true
         }
-      }
+      },
+      { chat_id: 123, message_id: 2, disable_notification: true }
+    ]);
+  });
+
+  it("still shows the guide when Telegram cannot pin it", async () => {
+    const telegram = new TelegramApiStub(true);
+    const bot = createTestBot(telegram, new StateRepositoryStub());
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await bot.handleUpdate(createCommandUpdate(123, "/start"));
+
+    const loggedErrors = logError.mock.calls;
+    logError.mockRestore();
+
+    expect(telegram.sentMessages[0]).toEqual(
+      expect.objectContaining({ chat_id: 123, text: userGuideMessage })
+    );
+    expect(loggedErrors).toEqual([
+      [expect.stringContaining('"event":"telegram_user_guide_pin_failed"')]
     ]);
   });
 });
@@ -58,7 +78,7 @@ describe("add dish button", () => {
     const states = new StateRepositoryStub();
     const bot = createTestBot(telegram, states, () => new Date("2026-07-21T12:00:00.000Z"));
 
-    await bot.handleUpdate(createTextUpdate(123, "➕ Добавить блюдо"));
+    await bot.handleUpdate(createTextUpdate(123, "➕ Добавить блюдо в базу"));
 
     expect(states.savedStates).toEqual([
       {
@@ -88,7 +108,7 @@ describe("dish catalog button", () => {
     );
     const bot = createTestBot(telegram, new StateRepositoryStub(), undefined, dishes);
 
-    await bot.handleUpdate(createTextUpdate(123, "📚 Мои блюда"));
+    await bot.handleUpdate(createTextUpdate(123, "📚 Посмотреть все мои блюда"));
 
     expect(telegram.sentMessages).toEqual([
       {
@@ -288,7 +308,7 @@ describe("recommend dish button", () => {
     const telegram = new TelegramApiStub();
     const bot = createTestBot(telegram, new StateRepositoryStub());
 
-    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать что приготовить"));
 
     expect(telegram.sentMessages).toEqual([
       {
@@ -313,16 +333,16 @@ describe("recommend dish button", () => {
       history
     );
 
-    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать что приготовить"));
 
     expect(telegram.sentMessages).toEqual([
       {
         chat_id: 123,
-        text: "🍽 Сегодня: Омлет",
+        text: "🍽 Сегодня предлагаю приготовить: Омлет",
         reply_markup: {
           inline_keyboard: [
             [{ text: "✅ Приготовили основное", callback_data: "c:recommendation-1" }],
-            [{ text: "🔄 Другой совет", callback_data: "a:recommendation-1" }]
+            [{ text: "🔄 Хочу другой совет", callback_data: "a:recommendation-1" }]
           ]
         }
       }
@@ -358,10 +378,12 @@ describe("recommend dish button", () => {
       )
     );
 
-    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать что приготовить"));
 
     expect(telegram.sentMessages).toContainEqual(
-      expect.objectContaining({ text: "🍽 Сегодня: Омлет\n\nЭто простой вариант на сегодня." })
+      expect.objectContaining({
+        text: "🍽 Сегодня предлагаю приготовить: Омлет\n\nЭто простой вариант на сегодня."
+      })
     );
   });
 
@@ -391,16 +413,16 @@ describe("recommend dish button", () => {
       )
     );
 
-    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать блюдо"));
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать что приготовить"));
 
     expect(telegram.sentMessages).toContainEqual({
       chat_id: 123,
       text:
-        "🍽 Сегодня: Омлет\n\nЭто простой вариант на сегодня.\n\n✨ Похожая новинка: Суп с чечевицей\nПохожий простой вариант.",
+        "🍽 Сегодня предлагаю приготовить: Омлет\n\nЭто простой вариант на сегодня.\n\n✨ Похожее от ИИ: Суп с чечевицей\nПохожий простой вариант.",
       reply_markup: {
         inline_keyboard: [
           [{ text: "✅ Приготовили основное", callback_data: "c:recommendation-1" }],
-          [{ text: "🔄 Другой совет", callback_data: "a:recommendation-1" }],
+          [{ text: "🔄 Хочу другой совет", callback_data: "a:recommendation-1" }],
           [
             { text: "✅ Приготовили новинку", callback_data: "n:recommendation-1" },
             { text: "💾 Сохранить новинку", callback_data: "s:recommendation-1" }
@@ -412,6 +434,35 @@ describe("recommend dish button", () => {
 });
 
 describe("awaiting dish message", () => {
+  it("uses the current add button label after the state expires", async () => {
+    const telegram = new TelegramApiStub();
+    const states = new StateRepositoryStub({
+      telegramUserId: "123",
+      state: "awaiting_dish",
+      expiresAt: "2026-07-21T11:59:59.000Z",
+      updatedAt: "2026-07-21T11:55:00.000Z"
+    });
+    const dishes = new DishRepositoryStub();
+    const bot = createTestBot(
+      telegram,
+      states,
+      () => new Date("2026-07-21T12:00:00.000Z"),
+      dishes
+    );
+
+    await bot.handleUpdate(createTextUpdate(123, "Омлет"));
+
+    expect(dishes.createdDishes).toEqual([]);
+    expect(states.clearedUserIds).toEqual(["123"]);
+    expect(telegram.sentMessages).toEqual([
+      {
+        chat_id: 123,
+        text:
+          "Время добавления истекло. Нажмите «➕ Добавить блюдо в базу», чтобы начать заново."
+      }
+    ]);
+  });
+
   it("adds the next text message and confirms it", async () => {
     const telegram = new TelegramApiStub();
     const states = new StateRepositoryStub({
@@ -640,7 +691,7 @@ function catalogKeyboard(
         { text: `✅ Приготовили №${index + 1}`, callback_data: `m:${dishId}` },
         { text: `🗑 Удалить №${index + 1}`, callback_data: `d:${dishId}` }
       ],
-      [{ text: `✨ Похожий совет №${index + 1}`, callback_data: `r:${dishId}` }]
+      [{ text: `✨ Похожее на №${index + 1} от ИИ`, callback_data: `r:${dishId}` }]
     ]),
     navigation
   ];
@@ -675,10 +726,24 @@ function dishStatistics(overrides: Partial<DishStatistics>): DishStatistics {
 class TelegramApiStub {
   public readonly sentMessages: unknown[] = [];
 
+  public constructor(private readonly failPin = false) {}
+
   public readonly fetch: typeof fetch = async (input, init): Promise<Response> => {
     const request = new Request(input, init);
     const payload: unknown = await request.json();
     this.sentMessages.push(payload);
+
+    if (new URL(request.url).pathname.endsWith("/pinChatMessage")) {
+      if (this.failPin) {
+        return Response.json({
+          ok: false,
+          error_code: 400,
+          description: "Bad Request: message can't be pinned"
+        });
+      }
+
+      return Response.json({ ok: true, result: true });
+    }
 
     return Response.json({
       ok: true,

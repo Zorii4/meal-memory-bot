@@ -1,9 +1,11 @@
+import { userGuideMessage } from "./user-guide";
+
 export const messages = {
   accessDenied: "У вас нет доступа к этому боту.",
-  addDishExpired: "Время добавления истекло. Нажмите «➕ Добавить блюдо», чтобы начать заново.",
-  addDishButton: "➕ Добавить блюдо",
+  addDishExpired: "Время добавления истекло. Нажмите «➕ Добавить блюдо в базу», чтобы начать заново.",
+  addDishButton: "➕ Добавить блюдо в базу",
   cancelled: "Текущий ввод отменён.",
-  catalogButton: "📚 Мои блюда",
+  catalogButton: "📚 Посмотреть все мои блюда",
   catalogEmpty: "В списке пока нет блюд.",
   catalogPage: (page: number, dishNames: readonly string[]): string =>
     `📚 Мои блюда — страница ${page}\n\n${dishNames
@@ -20,9 +22,9 @@ export const messages = {
     NAME_TOO_SHORT: "Название блюда должно содержать минимум 2 символа.",
     NAME_TOO_LONG: "Название блюда должно содержать максимум 100 символов."
   },
-  recommendDishButton: "🍽 Посоветовать блюдо",
+  recommendDishButton: "🍽 Посоветовать что приготовить",
   confirmCookButton: "✅ Приготовили основное",
-  anotherRecommendationButton: "🔄 Другой совет",
+  anotherRecommendationButton: "🔄 Хочу другой совет",
   confirmNewIdeaCookButton: "✅ Приготовили новинку",
   saveNewIdeaButton: "💾 Сохранить новинку",
   anotherRecommendationReady: "Вот другой вариант.",
@@ -40,18 +42,18 @@ export const messages = {
   newIdeaAlreadySaved: "Новинка уже есть в списке.",
   newIdeaSavedAndCooked: "Новинка добавлена и отмечена приготовленной.",
   newIdeaCooked: "Новинка отмечена приготовленной.",
-  newIdeaUnavailable: "У этой рекомендации нет доступной новинки.",
+  newIdeaUnavailable: "У этого блюда нет доступного нового варианта.",
   recommendationEmpty: "В списке пока нет блюд. Сначала добавьте несколько знакомых вариантов.",
   recommendationUnavailable: "Не удалось найти эту рекомендацию.",
-  fallbackRecommendation: (name: string): string => `🍽 Сегодня: ${name}`,
+  fallbackRecommendation: (name: string): string => `🍽 Сегодня предлагаю приготовить: ${name}`,
   aiRecommendation: (name: string, selectionReason: string): string =>
-    `🍽 Сегодня: ${name}\n\n${selectionReason}`,
+    `🍽 Сегодня предлагаю приготовить: ${name}\n\n${selectionReason}`,
   aiNewIdea: (name: string, whyItFits: string): string =>
-    `✨ Похожая новинка: ${name}\n${whyItFits}`,
+    `✨ Похожее от ИИ: ${name}\n${whyItFits}`,
   similarRecommendation: (name: string, whyItFits: string): string =>
     `✨ Похожее блюдо: ${name}\n\n${whyItFits}`,
   similarRecommendationUnavailable: "Не удалось подобрать похожее блюдо. Попробуйте ещё раз позже.",
   userUnavailable: "Не удалось определить отправителя.",
-  welcome: "Привет! Добавьте знакомое блюдо или попросите совет на сегодня.",
+  userGuide: userGuideMessage,
   yourTelegramId: (userId: string): string => `Ваш Telegram ID: ${userId}`
 } as const;
