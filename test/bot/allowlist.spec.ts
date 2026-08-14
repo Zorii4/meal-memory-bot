@@ -37,6 +37,15 @@ describe("allowlist", () => {
 
     expect(telegram.sentTexts).toEqual(["У вас нет доступа к этому боту."]);
   });
+
+  it("ignores the service update created when the bot pins the user guide", async () => {
+    const telegram = new TelegramApiStub();
+    const bot = createTestBot(telegram);
+
+    await bot.handleUpdate(createPinnedMessageServiceUpdate());
+
+    expect(telegram.sentTexts).toEqual([]);
+  });
 });
 
 function createTestBot(telegram: TelegramApiStub) {
@@ -114,6 +123,33 @@ function createCatalogCallbackUpdate(userId: number, data: string): Update {
         message_id: 1,
         date: 0,
         chat: { id: userId, type: "private", first_name: "Test" }
+      }
+    }
+  };
+}
+
+function createPinnedMessageServiceUpdate(): Update {
+  const botUser = {
+    id: 1,
+    is_bot: true,
+    first_name: "Meal Memory Bot",
+    username: "meal_memory_bot"
+  } as const;
+  const chat = { id: 123, type: "private", first_name: "Test" } as const;
+
+  return {
+    update_id: 2,
+    message: {
+      message_id: 3,
+      date: 0,
+      chat,
+      from: botUser,
+      pinned_message: {
+        message_id: 2,
+        date: 0,
+        chat,
+        from: botUser,
+        text: "User guide"
       }
     }
   };

@@ -3,7 +3,13 @@ import { messages } from "../messages";
 
 export function createAllowlistMiddleware(allowedUserIds: ReadonlySet<string>): Middleware<Context> {
   return async (context, next): Promise<void> => {
-    if (isAllowedUser(context.from?.id, allowedUserIds)) {
+    const sender = context.from;
+
+    if (sender === undefined || sender.is_bot) {
+      return;
+    }
+
+    if (isAllowedUser(sender.id, allowedUserIds)) {
       await next();
       return;
     }
