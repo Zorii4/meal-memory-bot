@@ -17,14 +17,21 @@ describe("catalog callback data", () => {
   it("round-trips a catalog dish identifier for manual cooking", () => {
     expect(parseCatalogCallbackData(createCatalogCookCallbackData("dish-1"))).toEqual({
       kind: "cook",
-      value: { dishId: "dish-1" }
+      value: { dishId: "dish-1", page: 0 }
     });
   });
 
   it("parses the explicit deletion confirmation callback", () => {
     expect(parseCatalogCallbackData("x:dish-1")).toEqual({
       kind: "confirm-delete",
-      value: { dishId: "dish-1" }
+      value: { dishId: "dish-1", page: 0 }
+    });
+  });
+
+  it("preserves the catalog page through deletion confirmation", () => {
+    expect(parseCatalogCallbackData("x:dish-1:3")).toEqual({
+      kind: "confirm-delete",
+      value: { dishId: "dish-1", page: 3 }
     });
   });
 

@@ -149,6 +149,30 @@ describe("getAIAssistedRecommendationForUser", () => {
     expect(result).toMatchObject({ kind: "recommended", source: "fallback", aiResponse: null });
   });
 
+  it("falls back when a new idea omits the AI-selected dish", async () => {
+    const dishes = new DishRepositoryStub([dish("dish-1"), dish("dish-2")]);
+    const history = new HistoryRepositoryStub();
+    const ai = new AIClientStub(
+      JSON.stringify({
+        selectedDishId: "dish-1",
+        selectionReason: "valid",
+        newIdea: {
+          name: "Суп",
+          similarToDishIds: ["dish-2"],
+          whyItFits: "valid",
+          ingredients: ["лук"],
+          prepMinutes: 20,
+          nutritionFocus: []
+        },
+        warnings: []
+      })
+    );
+
+    const result = await getAIAssistedRecommendationForUser("123", dependencies(dishes, history, ai));
+
+    expect(result).toMatchObject({ kind: "recommended", source: "fallback", aiResponse: null });
+  });
+
   it("falls back when the AI client fails", async () => {
     const dishes = new DishRepositoryStub([dish("dish-1")]);
     const history = new HistoryRepositoryStub();

@@ -11,10 +11,12 @@ export interface CatalogPageCallbackData {
 
 export interface CatalogCookCallbackData {
   dishId: string;
+  page: number;
 }
 
 export interface CatalogDeleteCallbackData {
   dishId: string;
+  page: number;
 }
 
 export type CatalogCallbackData =
@@ -33,20 +35,20 @@ export function createCatalogPageCallbackData(page: number): string {
   return `${CATALOG_PAGE_ACTION}:${page}`;
 }
 
-export function createCatalogCookCallbackData(dishId: string): string {
-  return `${CATALOG_COOK_ACTION}:${dishId}`;
+export function createCatalogCookCallbackData(dishId: string, page: number = 0): string {
+  return `${CATALOG_COOK_ACTION}:${dishId}:${page}`;
 }
 
-export function createCatalogDeleteCallbackData(dishId: string): string {
-  return `${CATALOG_DELETE_ACTION}:${dishId}`;
+export function createCatalogDeleteCallbackData(dishId: string, page: number = 0): string {
+  return `${CATALOG_DELETE_ACTION}:${dishId}:${page}`;
 }
 
-export function createCatalogConfirmDeleteCallbackData(dishId: string): string {
-  return `${CATALOG_CONFIRM_DELETE_ACTION}:${dishId}`;
+export function createCatalogConfirmDeleteCallbackData(dishId: string, page: number = 0): string {
+  return `${CATALOG_CONFIRM_DELETE_ACTION}:${dishId}:${page}`;
 }
 
-export function createCatalogCancelDeleteCallbackData(dishId: string): string {
-  return `${CATALOG_CANCEL_DELETE_ACTION}:${dishId}`;
+export function createCatalogCancelDeleteCallbackData(dishId: string, page: number = 0): string {
+  return `${CATALOG_CANCEL_DELETE_ACTION}:${dishId}:${page}`;
 }
 
 export function createCatalogSimilarRecommendationCallbackData(dishId: string): string {
@@ -58,39 +60,50 @@ export function parseCatalogCallbackData(value: string | undefined): CatalogCall
     return null;
   }
 
-  const [action, identifier, extra] = value.split(":");
+  const [action, identifier, pageValue, extra] = value.split(":");
 
   if (identifier === undefined || extra !== undefined) {
     return null;
   }
 
-  if (identifier.length > 0 && identifier.length <= 60) {
+  if (identifier.length > 0 && identifier.length <= 56) {
+    const page = pageValue === undefined ? 0 : parsePage(pageValue);
+
     if (action === CATALOG_COOK_ACTION) {
-      return { kind: "cook", value: { dishId: identifier } };
+      return page === null ? null : { kind: "cook", value: { dishId: identifier, page } };
     }
 
     if (action === CATALOG_DELETE_ACTION) {
-      return { kind: "request-delete", value: { dishId: identifier } };
+      return page === null ? null : { kind: "request-delete", value: { dishId: identifier, page } };
     }
 
     if (action === CATALOG_CONFIRM_DELETE_ACTION) {
-      return { kind: "confirm-delete", value: { dishId: identifier } };
+      return page === null ? null : { kind: "confirm-delete", value: { dishId: identifier, page } };
     }
 
     if (action === CATALOG_CANCEL_DELETE_ACTION) {
-      return { kind: "cancel-delete", value: { dishId: identifier } };
+      return page === null ? null : { kind: "cancel-delete", value: { dishId: identifier, page } };
     }
 
-    if (action === CATALOG_SIMILAR_RECOMMENDATION_ACTION) {
+    if (action === CATALOG_SIMILAR_RECOMMENDATION_ACTION && pageValue === undefined) {
       return { kind: "similar-recommendation", value: { dishId: identifier } };
     }
   }
 
-  if (action !== CATALOG_PAGE_ACTION || !/^(0|[1-9]\d*)$/.test(identifier)) {
+  if (action !== CATALOG_PAGE_ACTION || pageValue !== undefined) {
     return null;
   }
 
-  const page = Number(identifier);
+  const page = parsePage(identifier);
 
-  return Number.isSafeInteger(page) ? { kind: "page", value: { page } } : null;
+  return page === null ? null : { kind: "page", value: { page } };
+}
+
+function parsePage(value: string): number | null {
+  if (!/^(0|[1-9]\d*)$/.test(value)) {
+    return null;
+  }
+
+  const page = Number(value);
+  return Number.isSafeInteger(page) ? page : null;
 }

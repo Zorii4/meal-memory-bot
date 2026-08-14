@@ -87,6 +87,17 @@ export class D1HistoryRepository {
     return row === null ? null : toRecommendationEvent(row);
   }
 
+  public async linkNewIdeaDish(recommendationId: string, dishId: string): Promise<void> {
+    await this.db
+      .prepare(
+        `UPDATE recommendation_events
+        SET new_idea_dish_id = ?
+        WHERE id = ?`
+      )
+      .bind(dishId, recommendationId)
+      .run();
+  }
+
   public async listRecentCooked(limit: number): Promise<RecentCookedDish[]> {
     const result = await this.db
       .prepare(

@@ -5,6 +5,7 @@ import type { CookEvent, RecommendationEvent } from "../src/domain/history";
 import { D1DishRepository } from "../src/infrastructure/d1/dish-repository";
 import { D1HistoryRepository } from "../src/infrastructure/d1/history-repository";
 import { D1StateRepository } from "../src/infrastructure/d1/state-repository";
+import { D1UserGuideRepository } from "../src/infrastructure/d1/user-guide-repository";
 import { applyInitialSchema, resetDatabase } from "./helpers/apply-initial-schema";
 
 const dish: NewDish = {
@@ -134,5 +135,23 @@ describe("D1StateRepository", () => {
     expect(await repository.findByUserId(initialState.telegramUserId)).toEqual(updatedState);
     expect(await repository.clear(initialState.telegramUserId)).toBe(true);
     expect(await repository.findByUserId(initialState.telegramUserId)).toBeNull();
+  });
+});
+
+describe("D1UserGuideRepository", () => {
+  beforeEach(async () => {
+    await resetDatabase(env.DB);
+  });
+
+  it("stores and replaces the Telegram message used by idempotent /start", async () => {
+    const repository = new D1UserGuideRepository(env.DB);
+    await repository.save({ telegramUserId: "123456", chatId: "123456", messageId: 10 });
+    await repository.save({ telegramUserId: "123456", chatId: "123456", messageId: 11 });
+
+    expect(await repository.findByUserId("123456")).toEqual({
+      telegramUserId: "123456",
+      chatId: "123456",
+      messageId: 11
+    });
   });
 });

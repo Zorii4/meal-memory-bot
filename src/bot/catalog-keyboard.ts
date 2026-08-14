@@ -15,8 +15,8 @@ export function createCatalogKeyboard(page: DishCatalogPage): InlineKeyboard {
 
   for (const [index, dish] of page.dishes.entries()) {
     keyboard
-      .text(`✅ Приготовили №${index + 1}`, createCatalogCookCallbackData(dish.id))
-      .text(`🗑 Удалить №${index + 1}`, createCatalogDeleteCallbackData(dish.id))
+      .text(`✅ Приготовили №${index + 1}`, createCatalogCookCallbackData(dish.id, page.page))
+      .text(`🗑 Удалить №${index + 1}`, createCatalogDeleteCallbackData(dish.id, page.page))
       .row();
     keyboard.text(`✨ Похожее на №${index + 1} от ИИ`, createCatalogSimilarRecommendationCallbackData(dish.id)).row();
   }
@@ -32,8 +32,8 @@ export function createCatalogKeyboard(page: DishCatalogPage): InlineKeyboard {
   return keyboard;
 }
 
-export function createCatalogDeletionKeyboard(dishId: string): InlineKeyboard {
+export function createCatalogDeletionKeyboard(dishId: string, page: number): InlineKeyboard {
   return new InlineKeyboard()
-    .text(messages.confirmCatalogDeleteButton, createCatalogConfirmDeleteCallbackData(dishId))
-    .text(messages.cancelCatalogDeleteButton, createCatalogCancelDeleteCallbackData(dishId));
+    .text(messages.confirmCatalogDeleteButton, createCatalogConfirmDeleteCallbackData(dishId, page))
+    .text(messages.cancelCatalogDeleteButton, createCatalogCancelDeleteCallbackData(dishId, page));
 }

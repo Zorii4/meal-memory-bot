@@ -6,9 +6,10 @@ import {
 import { messages } from "../messages";
 import { createRecommendationKeyboard } from "../recommendation-keyboard";
 import { formatRecommendationText } from "../recommendation-text";
+import { finishProgressMessage, sendProgressMessage } from "../progress-message";
 
 export async function handleRecommendDish(
-  context: Pick<Context, "from" | "reply">,
+  context: Pick<Context, "api" | "from" | "reply">,
   dependencies: GetAIAssistedRecommendationDependencies
 ): Promise<void> {
   const userId = context.from?.id;
@@ -18,17 +19,21 @@ export async function handleRecommendDish(
     return;
   }
 
+  const progress = await sendProgressMessage(context, messages.recommendationLoading);
   const result = await getAIAssistedRecommendationForUser(String(userId), dependencies);
 
   if (result.kind === "empty") {
-    await context.reply(messages.recommendationEmpty);
+    await finishProgressMessage(context, progress, messages.recommendationEmpty);
     return;
   }
 
-  await context.reply(formatRecommendationText(result.dish.name, result.aiResponse), {
-    reply_markup: createRecommendationKeyboard(
+  await finishProgressMessage(
+    context,
+    progress,
+    formatRecommendationText(result.dish.name, result.aiResponse),
+    createRecommendationKeyboard(
       result.recommendation.id,
       result.aiResponse !== null && result.aiResponse.newIdea !== null
     )
-  });
+  );
 }

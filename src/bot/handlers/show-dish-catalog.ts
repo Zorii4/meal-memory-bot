@@ -1,4 +1,5 @@
 import type { Context } from "grammy";
+import type { InlineKeyboardMarkup } from "grammy/types";
 import {
   getDishCatalogPage,
   type GetDishCatalogPageDependencies
@@ -23,6 +24,7 @@ import {
 } from "../../application/get-ai-assisted-recommendation";
 import { createSimilarRecommendationKeyboard } from "../recommendation-keyboard";
 import { formatSimilarRecommendationText } from "../recommendation-text";
+import { finishProgressMessage, sendProgressMessage } from "../progress-message";
 
 export async function handleShowDishCatalog(
   context: Pick<Context, "reply">,
@@ -32,18 +34,19 @@ export async function handleShowDishCatalog(
 }
 
 export async function handleCatalogPageCallback(
-  context: Pick<Context, "answerCallbackQuery" | "reply">,
+  context: Pick<Context, "answerCallbackQuery" | "editMessageText" | "reply">,
   page: number,
   dependencies: GetDishCatalogPageDependencies
 ): Promise<void> {
-  await context.answerCallbackQuery();
-  await replyWithCatalogPage(context, page, dependencies);
+  await context.answerCallbackQuery({ text: messages.catalogUpdating });
+  await editCatalogPage(context, page, dependencies);
 }
 
 export async function handleCatalogCookCallback(
-  context: Pick<Context, "callbackQuery" | "answerCallbackQuery">,
+  context: Pick<Context, "callbackQuery" | "answerCallbackQuery" | "editMessageText" | "reply">,
   dishId: string,
-  dependencies: RecordCatalogDishCookedDependencies
+  page: number,
+  dependencies: RecordCatalogDishCookedDependencies & GetDishCatalogPageDependencies
 ): Promise<void> {
   const callbackQuery = context.callbackQuery;
 
@@ -60,11 +63,15 @@ export async function handleCatalogCookCallback(
   );
 
   await context.answerCallbackQuery({ text: getCatalogCookReply(result) });
+  if (callbackQuery.message !== undefined) {
+    await editCatalogPage(context, page, dependencies);
+  }
 }
 
 export async function handleCatalogDeleteRequestCallback(
-  context: Pick<Context, "answerCallbackQuery" | "reply">,
+  context: Pick<Context, "answerCallbackQuery" | "editMessageText" | "reply">,
   dishId: string,
+  page: number,
   dependencies: BeginCatalogDishDeletionDependencies
 ): Promise<void> {
   const result = await beginCatalogDishDeletion(dishId, dependencies);
@@ -74,32 +81,44 @@ export async function handleCatalogDeleteRequestCallback(
     return;
   }
 
-  await context.answerCallbackQuery();
-  await context.reply(messages.catalogDeletePrompt(result.dish.name), {
-    reply_markup: createCatalogDeletionKeyboard(result.dish.id)
-  });
+  await context.answerCallbackQuery({ text: messages.deletionPreparing });
+  await editMessageWithFallback(
+    context,
+    messages.catalogDeletePrompt(result.dish.name),
+    createCatalogDeletionKeyboard(result.dish.id, page)
+  );
 }
 
 export async function handleCatalogDeleteConfirmationCallback(
-  context: Pick<Context, "answerCallbackQuery">,
+  context: Pick<Context, "callbackQuery" | "answerCallbackQuery" | "editMessageText" | "reply">,
   dishId: string,
-  dependencies: ConfirmCatalogDishDeletionDependencies
+  page: number,
+  dependencies: ConfirmCatalogDishDeletionDependencies & GetDishCatalogPageDependencies
 ): Promise<void> {
   const result = await confirmCatalogDishDeletion(dishId, dependencies);
 
   await context.answerCallbackQuery({
     text: result.kind === "deleted" ? messages.catalogDeleteConfirmed : messages.catalogDishUnavailable
   });
+  if (context.callbackQuery?.message !== undefined) {
+    await editCatalogPage(context, page, dependencies);
+  }
 }
 
 export async function handleCatalogDeleteCancelCallback(
-  context: Pick<Context, "answerCallbackQuery">
+  context: Pick<Context, "callbackQuery" | "answerCallbackQuery" | "editMessageText" | "reply">,
+  page: number,
+  dependencies: GetDishCatalogPageDependencies
 ): Promise<void> {
   await context.answerCallbackQuery({ text: messages.catalogDeleteCancelled });
+
+  if (context.callbackQuery?.message !== undefined) {
+    await editCatalogPage(context, page, dependencies);
+  }
 }
 
 export async function handleCatalogSimilarRecommendationCallback(
-  context: Pick<Context, "callbackQuery" | "answerCallbackQuery" | "reply">,
+  context: Pick<Context, "api" | "callbackQuery" | "answerCallbackQuery" | "reply">,
   dishId: string,
   dependencies: GetAIAssistedRecommendationDependencies
 ): Promise<void> {
@@ -110,6 +129,8 @@ export async function handleCatalogSimilarRecommendationCallback(
     return;
   }
 
+  await answerCallbackQuerySafely(context);
+  const progress = await sendProgressMessage(context, messages.similarRecommendationLoading);
   const result = await getAIAssistedRecommendationForDish(
     dishId,
     String(callbackQuery.from.id),
@@ -117,20 +138,21 @@ export async function handleCatalogSimilarRecommendationCallback(
   );
 
   if (result.kind === "dish-not-found") {
-    await context.answerCallbackQuery({ text: messages.catalogDishUnavailable });
+    await finishProgressMessage(context, progress, messages.catalogDishUnavailable);
     return;
   }
 
   if (result.kind === "new-idea-unavailable") {
-    await context.reply(messages.similarRecommendationUnavailable);
-    await answerCallbackQuerySafely(context);
+    await finishProgressMessage(context, progress, messages.similarRecommendationUnavailable);
     return;
   }
 
-  await context.reply(formatSimilarRecommendationText(result.newIdea), {
-    reply_markup: createSimilarRecommendationKeyboard(result.recommendation.id)
-  });
-  await answerCallbackQuerySafely(context);
+  await finishProgressMessage(
+    context,
+    progress,
+    formatSimilarRecommendationText(result.newIdea),
+    createSimilarRecommendationKeyboard(result.recommendation.id)
+  );
 }
 
 async function answerCallbackQuerySafely(
@@ -153,10 +175,59 @@ async function replyWithCatalogPage(
   page: number,
   dependencies: GetDishCatalogPageDependencies
 ): Promise<void> {
-  const catalogPage = await getDishCatalogPage(page, dependencies);
+  const catalogPage = await loadCatalogPage(page, dependencies);
   await context.reply(formatCatalogText(catalogPage), {
-    reply_markup: createCatalogKeyboard(catalogPage)
+    reply_markup: getCatalogKeyboard(catalogPage)
   });
+}
+
+async function editCatalogPage(
+  context: Pick<Context, "editMessageText" | "reply">,
+  page: number,
+  dependencies: GetDishCatalogPageDependencies
+): Promise<void> {
+  const catalogPage = await loadCatalogPage(page, dependencies);
+
+  await editMessageWithFallback(
+    context,
+    formatCatalogText(catalogPage),
+    getCatalogKeyboard(catalogPage)
+  );
+}
+
+async function editMessageWithFallback(
+  context: Pick<Context, "editMessageText" | "reply">,
+  text: string,
+  replyMarkup: InlineKeyboardMarkup
+): Promise<void> {
+  try {
+    await context.editMessageText(text, { reply_markup: replyMarkup });
+  } catch (error: unknown) {
+    console.error(
+      JSON.stringify({
+        event: "telegram_catalog_edit_failed",
+        errorName: error instanceof Error ? error.name : "UnknownError"
+      })
+    );
+    await context.reply(text, { reply_markup: replyMarkup });
+  }
+}
+
+function getCatalogKeyboard(catalogPage: Awaited<ReturnType<typeof getDishCatalogPage>>): InlineKeyboardMarkup {
+  return catalogPage.dishes.length === 0
+    ? { inline_keyboard: [] }
+    : createCatalogKeyboard(catalogPage);
+}
+
+async function loadCatalogPage(
+  page: number,
+  dependencies: GetDishCatalogPageDependencies
+) {
+  const catalogPage = await getDishCatalogPage(page, dependencies);
+
+  return catalogPage.dishes.length === 0 && catalogPage.page > 0
+    ? getDishCatalogPage(catalogPage.page - 1, dependencies)
+    : catalogPage;
 }
 
 function getCatalogCookReply(result: RecordCatalogDishCookedResult): string {

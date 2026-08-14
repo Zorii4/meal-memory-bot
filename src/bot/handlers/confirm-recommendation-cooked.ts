@@ -19,13 +19,14 @@ import { callbackActions, parseRecommendationCallbackData } from "../callback-da
 import { messages } from "../messages";
 import { createRecommendationKeyboard } from "../recommendation-keyboard";
 import { formatRecommendationText } from "../recommendation-text";
+import { finishProgressMessage, sendProgressMessage } from "../progress-message";
 
 type RecommendationCallbackDependencies = ConfirmRecommendationCookedDependencies &
   GetAIAssistedRecommendationDependencies &
   SaveAIRecommendationIdeaDependencies;
 
 export async function handleRecommendationCallback(
-  context: Pick<Context, "callbackQuery" | "answerCallbackQuery" | "reply">,
+  context: Pick<Context, "api" | "callbackQuery" | "answerCallbackQuery" | "reply">,
   dependencies: RecommendationCallbackDependencies
 ): Promise<void> {
   const callbackQuery = context.callbackQuery;
@@ -37,6 +38,7 @@ export async function handleRecommendationCallback(
   }
 
   if (callbackData.action === callbackActions.requestAnother) {
+    await answerCallbackQuerySafely(context);
     await handleAnotherRecommendation(context, callbackQuery.from.id, dependencies);
     return;
   }
@@ -75,25 +77,42 @@ export async function handleRecommendationCallback(
 }
 
 async function handleAnotherRecommendation(
-  context: Pick<Context, "answerCallbackQuery" | "reply">,
+  context: Pick<Context, "api" | "reply">,
   userId: number,
   dependencies: GetAIAssistedRecommendationDependencies
 ): Promise<void> {
+  const progress = await sendProgressMessage(context, messages.recommendationLoading);
   const result = await getAIAssistedRecommendationForUser(String(userId), dependencies);
 
-  await context.answerCallbackQuery({ text: messages.anotherRecommendationReady });
-
   if (result.kind === "empty") {
-    await context.reply(messages.recommendationEmpty);
+    await finishProgressMessage(context, progress, messages.recommendationEmpty);
     return;
   }
 
-  await context.reply(formatRecommendationText(result.dish.name, result.aiResponse), {
-    reply_markup: createRecommendationKeyboard(
+  await finishProgressMessage(
+    context,
+    progress,
+    formatRecommendationText(result.dish.name, result.aiResponse),
+    createRecommendationKeyboard(
       result.recommendation.id,
       result.aiResponse !== null && result.aiResponse.newIdea !== null
     )
-  });
+  );
+}
+
+async function answerCallbackQuerySafely(
+  context: Pick<Context, "answerCallbackQuery">
+): Promise<void> {
+  try {
+    await context.answerCallbackQuery();
+  } catch (error: unknown) {
+    console.error(
+      JSON.stringify({
+        event: "telegram_callback_answer_failed",
+        errorName: error instanceof Error ? error.name : "UnknownError"
+      })
+    );
+  }
 }
 
 function getCallbackReply(result: ConfirmRecommendationCookedResult): string {

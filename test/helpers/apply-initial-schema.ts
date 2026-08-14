@@ -1,6 +1,8 @@
 import initialSchema from "../../migrations/0001_initial_schema.sql?raw";
 import deleteDishRelatedHistory from "../../migrations/0002_delete_dish_related_history.sql?raw";
 import recommendationPurpose from "../../migrations/0003_add_recommendation_purpose.sql?raw";
+import materializedAiIdeas from "../../migrations/0004_link_materialized_ai_ideas.sql?raw";
+import userGuideMessages from "../../migrations/0005_store_user_guide_messages.sql?raw";
 
 export async function applyInitialSchema(db: D1Database): Promise<void> {
   const statements = initialSchema
@@ -15,13 +17,16 @@ export async function applyInitialSchema(db: D1Database): Promise<void> {
   await db.batch([
     ...statements.map((statement) => db.prepare(statement)),
     db.prepare(deleteDishTrigger),
-    db.prepare(recommendationPurpose.trim())
+    db.prepare(recommendationPurpose.trim()),
+    db.prepare(materializedAiIdeas.trim()),
+    db.prepare(userGuideMessages.trim())
   ]);
 }
 
 export async function resetDatabase(db: D1Database): Promise<void> {
   await db.batch([
     db.prepare("DELETE FROM conversation_states"),
+    db.prepare("DELETE FROM user_guide_messages"),
     db.prepare("DELETE FROM recommendation_events"),
     db.prepare("DELETE FROM cook_events"),
     db.prepare("DELETE FROM dishes")

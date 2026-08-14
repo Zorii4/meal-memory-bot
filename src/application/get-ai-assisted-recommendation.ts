@@ -188,6 +188,10 @@ async function validateNewIdea(
     throw new AIRecommendationValidationError("NEW_IDEA_SIMILARITY_INVALID");
   }
 
+  if (!newIdea.similarToDishIds.includes(response.selectedDishId)) {
+    throw new AIRecommendationValidationError("NEW_IDEA_SELECTED_DISH_MISSING");
+  }
+
   const duplicate = await dishes.findByNormalizedName(normalizeDishName(newIdea.name));
 
   if (duplicate !== null) {

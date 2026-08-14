@@ -6,6 +6,7 @@ import type { DishRepository } from "./add-dish";
 
 export interface NewIdeaHistoryRepository {
   findRecommendationById(id: string): Promise<RecommendationEvent | null>;
+  linkNewIdeaDish(recommendationId: string, dishId: string): Promise<void>;
   recordCook(event: CookEvent): Promise<{ kind: "created"; event: CookEvent } | { kind: "duplicate" }>;
 }
 
@@ -82,6 +83,7 @@ async function resolveNewIdeaDish(
   const existing = await dependencies.dishes.findByNormalizedName(normalizedName);
 
   if (existing !== null) {
+    await dependencies.history.linkNewIdeaDish(recommendation.id, existing.id);
     return { kind: "existing", dish: existing };
   }
 
@@ -99,6 +101,7 @@ async function resolveNewIdeaDish(
   const creation = await dependencies.dishes.create(dish);
 
   if (creation.kind === "created") {
+    await dependencies.history.linkNewIdeaDish(recommendation.id, creation.dish.id);
     return creation;
   }
 
@@ -108,6 +111,7 @@ async function resolveNewIdeaDish(
     throw new NewIdeaPersistenceError();
   }
 
+  await dependencies.history.linkNewIdeaDish(recommendation.id, concurrentDish.id);
   return { kind: "existing", dish: concurrentDish };
 }
 

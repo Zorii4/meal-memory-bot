@@ -7,8 +7,10 @@ import type {
 } from "../../src/application/get-ai-assisted-recommendation";
 import type { RecommendationDishRepository } from "../../src/application/get-fallback-recommendation";
 import { createBot } from "../../src/bot/create-bot";
+import { handleStartCommand } from "../../src/bot/handlers/start";
 import { userGuideMessage } from "../../src/bot/user-guide";
 import type { ConversationState } from "../../src/domain/conversation-state";
+import type { UserGuideMessage, UserGuideRepository } from "../../src/application/user-guide-repository";
 import type { Dish, NewDish } from "../../src/domain/dish";
 import type { DishStatistics } from "../../src/domain/dish";
 import type { CookEvent, RecentCookedDish, RecommendationEvent } from "../../src/domain/history";
@@ -16,7 +18,8 @@ import type { CookEvent, RecentCookedDish, RecommendationEvent } from "../../src
 describe("/start", () => {
   it("shows the persistent main keyboard and pins the user guide", async () => {
     const telegram = new TelegramApiStub();
-    const bot = createTestBot(telegram, new StateRepositoryStub());
+    const states = new StateRepositoryStub();
+    const bot = createTestBot(telegram, states);
 
     await bot.handleUpdate(createCommandUpdate(123, "/start"));
 
@@ -36,6 +39,7 @@ describe("/start", () => {
       },
       { chat_id: 123, message_id: 2, disable_notification: true }
     ]);
+    expect(states.clearedUserIds).toEqual(["123"]);
   });
 
   it("still shows the guide when Telegram cannot pin it", async () => {
@@ -54,6 +58,70 @@ describe("/start", () => {
     expect(loggedErrors).toEqual([
       [expect.stringContaining('"event":"telegram_user_guide_pin_failed"')]
     ]);
+  });
+
+  it("reuses the stored guide message on repeated /start", async () => {
+    const pinned: Array<{ chatId: string; messageId: number }> = [];
+    const states = new StateRepositoryStub();
+    const userGuides: UserGuideRepository = {
+      findByUserId: async () => ({ telegramUserId: "123", chatId: "123", messageId: 7 }),
+      save: async () => undefined
+    };
+
+    await handleStartCommand(
+      {
+        from: { id: 123 },
+        reply: async () => {
+          throw new Error("a duplicate guide must not be sent");
+        },
+        api: {
+          pinChatMessage: async (chatId, messageId) => {
+            pinned.push({ chatId: String(chatId), messageId });
+            return true;
+          }
+        }
+      } as never,
+      { states, userGuides }
+    );
+
+    expect(states.clearedUserIds).toEqual(["123"]);
+    expect(pinned).toEqual([{ chatId: "123", messageId: 7 }]);
+  });
+
+  it("replaces a stored guide message that is no longer available", async () => {
+    const states = new StateRepositoryStub();
+    const saved: UserGuideMessage[] = [];
+    let pinCalls = 0;
+    const logError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await handleStartCommand(
+      {
+        from: { id: 123 },
+        reply: async () => ({ chat: { id: 123 }, message_id: 8 }),
+        api: {
+          pinChatMessage: async () => {
+            pinCalls += 1;
+            if (pinCalls === 1) {
+              throw new Error("message to pin not found");
+            }
+            return true;
+          }
+        }
+      } as never,
+      {
+        states,
+        userGuides: {
+          findByUserId: async () => ({ telegramUserId: "123", chatId: "123", messageId: 7 }),
+          save: async (message) => {
+            saved.push(message);
+          }
+        }
+      }
+    );
+
+    logError.mockRestore();
+    expect(saved).toEqual([{ telegramUserId: "123", chatId: "123", messageId: 8 }]);
+    expect(pinCalls).toBe(2);
   });
 });
 
@@ -136,12 +204,13 @@ describe("dish catalog button", () => {
     await bot.handleUpdate(createCallbackUpdate(123, "p:1"));
 
     expect(telegram.sentMessages).toEqual([
-      { callback_query_id: "callback-1" },
+      { callback_query_id: "callback-1", text: "Обновляю каталог…" },
       {
         chat_id: 123,
+        message_id: 1,
         text: "📚 Мои блюда — страница 2\n\n1. Блюдо 9",
         reply_markup: {
-          inline_keyboard: catalogKeyboard(["dish-9"], [{ text: "◀️", callback_data: "p:0" }])
+          inline_keyboard: catalogKeyboard(["dish-9"], [{ text: "◀️", callback_data: "p:0" }], 1)
         }
       }
     ]);
@@ -171,7 +240,8 @@ describe("dish catalog button", () => {
       }
     ]);
     expect(telegram.sentMessages).toEqual([
-      { callback_query_id: "callback-1", text: "Отметил приготовление." }
+      { callback_query_id: "callback-1", text: "Отметил приготовление." },
+      catalogEditPayload(["dish-1"], ["Омлет"])
     ]);
   });
 
@@ -206,8 +276,14 @@ describe("dish catalog button", () => {
 
     expect(history.recommendations).toMatchObject([{ primaryDishId: "dish-1", purpose: "similar" }]);
     expect(telegram.sentMessages).toEqual([
+      { callback_query_id: "callback-1" },
       {
         chat_id: 123,
+        text: "⏳ Ищу похожее блюдо…"
+      },
+      {
+        chat_id: 123,
+        message_id: 2,
         text: "✨ Похожее блюдо: Суп с чечевицей\n\nПохожий простой вариант.",
         reply_markup: {
           inline_keyboard: [
@@ -217,8 +293,7 @@ describe("dish catalog button", () => {
             ]
           ]
         }
-      },
-      { callback_query_id: "callback-1" }
+      }
     ]);
   });
 
@@ -240,7 +315,9 @@ describe("dish catalog button", () => {
     expect(history.cookEvents).toHaveLength(1);
     expect(telegram.sentMessages).toEqual([
       { callback_query_id: "callback-1", text: "Отметил приготовление." },
-      { callback_query_id: "callback-1", text: "Приготовление уже отмечено." }
+      catalogEditPayload(["dish-1"], ["Омлет"]),
+      { callback_query_id: "callback-1", text: "Приготовление уже отмечено." },
+      catalogEditPayload(["dish-1"], ["Омлет"])
     ]);
   });
 
@@ -256,16 +333,17 @@ describe("dish catalog button", () => {
     await bot.handleUpdate(createCallbackUpdate(123, "d:dish-1"));
 
     expect(telegram.sentMessages).toEqual([
-      { callback_query_id: "callback-1" },
+      { callback_query_id: "callback-1", text: "Открываю подтверждение…" },
       {
         chat_id: 123,
+        message_id: 1,
         text:
           "Удалить блюдо «Омлет» навсегда? Вместе с ним будут удалены связанные отметки приготовления и рекомендации.",
         reply_markup: {
           inline_keyboard: [
             [
-              { text: "🗑 Удалить навсегда", callback_data: "x:dish-1" },
-              { text: "Отмена", callback_data: "k:dish-1" }
+              { text: "🗑 Удалить навсегда", callback_data: "x:dish-1:0" },
+              { text: "Отмена", callback_data: "k:dish-1:0" }
             ]
           ]
         }
@@ -285,7 +363,8 @@ describe("dish catalog button", () => {
       {
         callback_query_id: "callback-1",
         text: "Блюдо и связанные с ним записи истории удалены."
-      }
+      },
+      catalogEditPayload([], [])
     ]);
   });
 
@@ -298,12 +377,52 @@ describe("dish catalog button", () => {
 
     expect(await dishes.findActiveCatalogDishById("dish-1")).toEqual({ id: "dish-1", name: "Омлет" });
     expect(telegram.sentMessages).toEqual([
-      { callback_query_id: "callback-1", text: "Удаление отменено." }
+      { callback_query_id: "callback-1", text: "Удаление отменено." },
+      catalogEditPayload(["dish-1"], ["Омлет"])
     ]);
+  });
+
+  it("returns to the previous catalog page when deletion empties the last page", async () => {
+    const telegram = new TelegramApiStub();
+    const statistics = Array.from({ length: 9 }, (_, index) =>
+      dishStatistics({
+        id: `dish-${index + 1}`,
+        name: `Блюдо ${String(index + 1).padStart(2, "0")}`
+      })
+    );
+    const bot = createTestBot(
+      telegram,
+      new StateRepositoryStub(),
+      undefined,
+      new DishRepositoryStub(statistics)
+    );
+
+    await bot.handleUpdate(createCallbackUpdate(123, "x:dish-9:1"));
+
+    expect(telegram.sentMessages.at(-1)).toEqual(
+      catalogEditPayload(
+        statistics.slice(0, 8).map((dish) => dish.id),
+        statistics.slice(0, 8).map((dish) => dish.name)
+      )
+    );
   });
 });
 
 describe("recommend dish button", () => {
+  it("clears an unfinished dish input before changing sections", async () => {
+    const telegram = new TelegramApiStub();
+    const states = new StateRepositoryStub({
+      telegramUserId: "123",
+      state: "awaiting_dish",
+      expiresAt: "2026-07-21T12:05:00.000Z",
+      updatedAt: "2026-07-21T12:00:00.000Z"
+    });
+    const bot = createTestBot(telegram, states);
+
+    await bot.handleUpdate(createTextUpdate(123, "🍽 Посоветовать что приготовить"));
+
+    expect(states.clearedUserIds).toEqual(["123"]);
+  });
   it("explains how to proceed when the catalog is empty", async () => {
     const telegram = new TelegramApiStub();
     const bot = createTestBot(telegram, new StateRepositoryStub());
@@ -313,6 +432,11 @@ describe("recommend dish button", () => {
     expect(telegram.sentMessages).toEqual([
       {
         chat_id: 123,
+        text: "⏳ Подбираю вариант…"
+      },
+      {
+        chat_id: 123,
+        message_id: 2,
         text: "В списке пока нет блюд. Сначала добавьте несколько знакомых вариантов."
       }
     ]);
@@ -338,6 +462,11 @@ describe("recommend dish button", () => {
     expect(telegram.sentMessages).toEqual([
       {
         chat_id: 123,
+        text: "⏳ Подбираю вариант…"
+      },
+      {
+        chat_id: 123,
+        message_id: 2,
         text: "🍽 Сегодня предлагаю приготовить: Омлет",
         reply_markup: {
           inline_keyboard: [
@@ -417,6 +546,7 @@ describe("recommend dish button", () => {
 
     expect(telegram.sentMessages).toContainEqual({
       chat_id: 123,
+      message_id: 2,
       text:
         "🍽 Сегодня предлагаю приготовить: Омлет\n\nЭто простой вариант на сегодня.\n\n✨ Похожее от ИИ: Суп с чечевицей\nПохожий простой вариант.",
       reply_markup: {
@@ -515,6 +645,7 @@ function createTestBot(
       systemPrompt: "private prompt",
       similarSystemPrompt: "similar-only instruction",
       states,
+      userGuides: new UserGuideRepositoryStub(),
       now,
       generateId,
       botInfo: {
@@ -602,6 +733,18 @@ class StateRepositoryStub {
   }
 }
 
+class UserGuideRepositoryStub implements UserGuideRepository {
+  public readonly saved: UserGuideMessage[] = [];
+
+  public async findByUserId(): Promise<UserGuideMessage | null> {
+    return null;
+  }
+
+  public async save(message: UserGuideMessage): Promise<void> {
+    this.saved.push(message);
+  }
+}
+
 class DishRepositoryStub implements DishRepository {
   public readonly createdDishes: NewDish[] = [];
 
@@ -683,18 +826,36 @@ class HistoryRepositoryStub {
 
 function catalogKeyboard(
   dishIds: string[],
-  navigation: Array<{ text: string; callback_data: string }>
+  navigation: Array<{ text: string; callback_data: string }>,
+  page: number = 0
 ): Array<Array<{ text: string; callback_data: string }>> {
   return [
     ...dishIds.flatMap((dishId, index) => [
       [
-        { text: `✅ Приготовили №${index + 1}`, callback_data: `m:${dishId}` },
-        { text: `🗑 Удалить №${index + 1}`, callback_data: `d:${dishId}` }
+        { text: `✅ Приготовили №${index + 1}`, callback_data: `m:${dishId}:${page}` },
+        { text: `🗑 Удалить №${index + 1}`, callback_data: `d:${dishId}:${page}` }
       ],
       [{ text: `✨ Похожее на №${index + 1} от ИИ`, callback_data: `r:${dishId}` }]
     ]),
     navigation
   ];
+}
+
+function catalogEditPayload(dishIds: string[], dishNames: string[], page: number = 0): unknown {
+  return {
+    chat_id: 123,
+    message_id: 1,
+    text:
+      dishNames.length === 0
+        ? "В списке пока нет блюд."
+        : `📚 Мои блюда — страница ${page + 1}\n\n${dishNames
+            .map((name, index) => `${index + 1}. ${name}`)
+            .join("\n")}`,
+    reply_markup: {
+      inline_keyboard:
+        dishIds.length === 0 ? [] : catalogKeyboard(dishIds, [], page)
+    }
+  };
 }
 
 class AIClientStub implements AIRecommendationClient {

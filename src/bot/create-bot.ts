@@ -1,6 +1,7 @@
 import { Bot, type BotConfig, type Context } from "grammy";
 import type { DishRepository } from "../application/add-dish";
 import type { ConversationStateRepository } from "../application/conversation-state-repository";
+import type { UserGuideRepository } from "../application/user-guide-repository";
 import type { CatalogDishRepository } from "../application/get-dish-catalog-page";
 import type { CatalogCookDishRepository } from "../application/record-catalog-dish-cooked";
 import type { CatalogDeleteDishRepository } from "../application/delete-catalog-dish";
@@ -51,6 +52,7 @@ export interface CreateBotDependencies {
   systemPrompt: string;
   similarSystemPrompt: string;
   states: ConversationStateRepository;
+  userGuides?: UserGuideRepository;
   now?: () => Date;
   generateId?: () => string;
   random?: () => number;
@@ -70,7 +72,10 @@ export function createBot(
 
   bot.command("id", handleIdCommand);
   bot.use(createAllowlistMiddleware(config.telegram.allowedUserIds));
-  bot.command("start", handleStartCommand);
+  bot.command("start", (context) => handleStartCommand(context, {
+    states: dependencies.states,
+    userGuides: dependencies.userGuides ?? noUserGuideRepository
+  }));
   bot.command("cancel", (context) => handleCancelCommand(context, { states: dependencies.states }));
   bot.hears(messages.addDishButton, (context) =>
     handleBeginAddDish(context, {
@@ -78,8 +83,12 @@ export function createBot(
       now: (dependencies.now ?? (() => new Date()))()
     })
   );
-  bot.hears(messages.recommendDishButton, (context) =>
-    handleRecommendDish(context, {
+  bot.hears(messages.recommendDishButton, async (context) => {
+    if (context.from !== undefined) {
+      await dependencies.states.clear(String(context.from.id));
+    }
+
+    await handleRecommendDish(context, {
       dishes: dependencies.dishes,
       history: dependencies.history,
       ai: dependencies.ai,
@@ -89,11 +98,15 @@ export function createBot(
       generateId: dependencies.generateId ?? (() => crypto.randomUUID()),
       random: dependencies.random ?? Math.random,
       onAIFallback: dependencies.onAIFallback
-    })
-  );
-  bot.hears(messages.catalogButton, (context) =>
-    handleShowDishCatalog(context, { dishes: dependencies.dishes })
-  );
+    });
+  });
+  bot.hears(messages.catalogButton, async (context) => {
+    if (context.from !== undefined) {
+      await dependencies.states.clear(String(context.from.id));
+    }
+
+    await handleShowDishCatalog(context, { dishes: dependencies.dishes });
+  });
   bot.on("callback_query", async (context) => {
     const catalogCallback = parseCatalogCallbackData(context.callbackQuery.data);
 
@@ -104,7 +117,7 @@ export function createBot(
       }
 
       if (catalogCallback.kind === "cook") {
-        await handleCatalogCookCallback(context, catalogCallback.value.dishId, {
+        await handleCatalogCookCallback(context, catalogCallback.value.dishId, catalogCallback.value.page, {
           dishes: dependencies.dishes,
           history: dependencies.history,
           now: (dependencies.now ?? (() => new Date()))(),
@@ -114,14 +127,14 @@ export function createBot(
       }
 
       if (catalogCallback.kind === "request-delete") {
-        await handleCatalogDeleteRequestCallback(context, catalogCallback.value.dishId, {
+        await handleCatalogDeleteRequestCallback(context, catalogCallback.value.dishId, catalogCallback.value.page, {
           dishes: dependencies.dishes
         });
         return;
       }
 
       if (catalogCallback.kind === "confirm-delete") {
-        await handleCatalogDeleteConfirmationCallback(context, catalogCallback.value.dishId, {
+        await handleCatalogDeleteConfirmationCallback(context, catalogCallback.value.dishId, catalogCallback.value.page, {
           dishes: dependencies.dishes
         });
         return;
@@ -142,7 +155,9 @@ export function createBot(
         return;
       }
 
-      await handleCatalogDeleteCancelCallback(context);
+      await handleCatalogDeleteCancelCallback(context, catalogCallback.value.page, {
+        dishes: dependencies.dishes
+      });
       return;
     }
 
@@ -169,3 +184,10 @@ export function createBot(
 
   return bot;
 }
+
+const noUserGuideRepository: UserGuideRepository = {
+  async findByUserId(): Promise<null> {
+    return null;
+  },
+  async save(): Promise<void> {}
+};

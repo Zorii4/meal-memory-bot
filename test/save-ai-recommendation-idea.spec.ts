@@ -118,11 +118,16 @@ class DishRepositoryStub implements DishRepository {
 
 class HistoryRepositoryStub implements NewIdeaHistoryRepository {
   public readonly cookEvents: CookEvent[] = [];
+  public readonly linkedIdeas: Array<{ recommendationId: string; dishId: string }> = [];
 
   public constructor(private readonly recommendation: RecommendationEvent) {}
 
   public async findRecommendationById(id: string): Promise<RecommendationEvent | null> {
     return id === this.recommendation.id ? this.recommendation : null;
+  }
+
+  public async linkNewIdeaDish(recommendationId: string, dishId: string): Promise<void> {
+    this.linkedIdeas.push({ recommendationId, dishId });
   }
 
   public async recordCook(
